@@ -20,7 +20,7 @@
     <Copyright>(c) 2021 Jose Torres. (c) 2024-2026 Cyp.</Copyright>
     <Authors>Jose Torres; Cyp</Authors>
     <Description>AudioFlip is a Windows app that makes it easy to quickly switch your default audio device.</Description>
-    <Version>1.2.0</Version>
+    <Version>1.2.1</Version>
   </PropertyGroup>
 
 </Project>
