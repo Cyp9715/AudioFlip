@@ -44,41 +44,10 @@ public sealed class CLI
     public static string GetDeviceId(string devicePart, AudioDevice[] deviceList)
     {
         var (name, uid) = DecodeName(devicePart);
-        var found = false;
-        var devices = deviceList.Where(x => x.Name == name);
+        if (DeviceReference.TryResolveId(DeviceReference.EncodeName(name, uid), deviceList, out var id))
+            return id;
 
-        if (devices.Count() > 1)
-        {
-            found = true;
-            devices = devices.Where(x => x.Id.GetDjb2HashCode() == uid);
-            if (devices.Count() > 1)
-                throw CreateError("Found two devices with the same name.");
-        }
-
-        if (devices.Count() == 1)
-            return devices.First().Id;
-
-        devices = deviceList.Where(x => x.Id.GetDjb2HashCode() == uid);
-        if (devices.Count() > 1)
-        {
-            found = true;
-            devices = devices.Where(x => x.Name == name);
-            if (devices.Count() > 1)
-                throw CreateError("Found two devices with the same name.");
-        }
-
-        if (devices.Count() == 1)
-            return devices.First().Id;
-
-        if (!found)
-            throw CreateError($"Device \"{name}\" doesn't exist.");
-
-        throw CreateError();
-
-        static CLIException CreateError(string? msg = null)
-        {
-            return new($"{(msg != null ? msg + " " : string.Empty)}Please regenerate your command.");
-        }
+        throw new CLIException($"Device \"{name}\" is unavailable or ambiguous. Please regenerate your command.");
     }
 
     public static string BuildCommand(AudioDeviceClass deviceClass, AudioDevice[] devices)
@@ -99,7 +68,7 @@ public sealed class CLI
 
     public static string EncodeName(AudioDevice name)
     {
-        return $"\"{name.Name} / {name.Id.GetDjb2HashCode()}\"";
+        return QuoteArgument($"{name.Name} / {name.Id.GetDjb2HashCode()}");
     }
 
     public static (string Name, uint Uid) DecodeName(string text)
@@ -110,8 +79,8 @@ public sealed class CLI
 
         string name = match.Groups[1].Value;
         uint uid = 0;
-        if (match.Groups.Count > 2)
-            uint.TryParse(match.Groups[2].Value, out uid);
+        if (match.Groups[2].Success && !uint.TryParse(match.Groups[2].Value, out uid))
+            throw new CLIException("Invalid device ID hash. Please regenerate your command.");
         return (name, uid);
     }
 
@@ -144,50 +113,91 @@ public sealed class CLI
     public static void ParseArguments(string[] cmdArgs, out string[] devices, out AudioDeviceClass type)
     {
         AudioDeviceClass? localType = null;
-
-        devices = cmdArgs.Where(arg =>
+        var names = new List<string>();
+        foreach (var arg in cmdArgs)
         {
-            if (DecodeClass(arg, out localType))
-                return false;
+            if (DecodeClass(arg, out var parsedType))
+            {
+                if (localType.HasValue && localType != parsedType)
+                    throw new CLIException("Choose either -playback or -recording, not both.");
+                localType = parsedType;
+            }
+            else
+            {
+                names.Add(arg);
+            }
+        }
 
-            return true;
-        }).ToArray();
-
+        devices = names.ToArray();
         type = localType.GetValueOrDefault(AudioDeviceClass.Render);
     }
 
     public static string[] ParseArguments(string cmd)
     {
         var args = new List<string>();
-        var insideQuote = false;
-        var part = new StringBuilder();
-        for (int i = 0; i < cmd.Length; ++i)
+        var i = 0;
+        while (i < cmd.Length)
         {
-            var c = cmd[i];
-            if (c == ' ')
+            while (i < cmd.Length && char.IsWhiteSpace(cmd[i]))
+                ++i;
+            if (i == cmd.Length)
+                break;
+
+            var insideQuote = false;
+            var part = new StringBuilder();
+            while (i < cmd.Length && (insideQuote || !char.IsWhiteSpace(cmd[i])))
             {
-                if (!insideQuote)
+                var slashes = 0;
+                while (i < cmd.Length && cmd[i] == '\\')
                 {
-                    if (part.Length > 0)
-                    {
-                        args.Add(part.ToString());
-                        part.Clear();
-                        continue;
-                    }
+                    ++slashes;
+                    ++i;
+                }
+
+                if (i < cmd.Length && cmd[i] == '"')
+                {
+                    part.Append('\\', slashes / 2);
+                    if (slashes % 2 == 1)
+                        part.Append('"');
+                    else
+                        insideQuote = !insideQuote;
+                    ++i;
+                }
+                else
+                {
+                    part.Append('\\', slashes);
+                    if (i < cmd.Length && (insideQuote || !char.IsWhiteSpace(cmd[i])))
+                        part.Append(cmd[i++]);
                 }
             }
-            else if (c == '"')
+
+            if (insideQuote)
+                throw new CLIException("Unterminated quote in command.");
+            args.Add(part.ToString());
+        }
+
+        return args.ToArray();
+    }
+
+    private static string QuoteArgument(string value)
+    {
+        var result = new StringBuilder("\"");
+        var slashes = 0;
+        foreach (var character in value)
+        {
+            if (character == '\\')
             {
-                insideQuote = !insideQuote;
+                ++slashes;
                 continue;
             }
 
-            part.Append(c);
+            result.Append('\\', character == '"' ? (slashes * 2) + 1 : slashes);
+            result.Append(character);
+            slashes = 0;
         }
 
-        if (part.Length > 0)
-            args.Add(part.ToString());
-
-        return args.ToArray();
+        result.Append('\\', slashes * 2);
+        result.Append('"');
+        return result.ToString();
     }
 }

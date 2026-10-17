@@ -10,7 +10,7 @@ internal static class WinUtil
     {
         return LoadImage(
             IntPtr.Zero,
-            iconName,
+            Path.Combine(AppContext.BaseDirectory, iconName),
             ImageType.IMAGE_ICON,
             GetSystemMetrics(big ? SystemMetric.SM_CXICON : SystemMetric.SM_CXSMICON),
             GetSystemMetrics(big ? SystemMetric.SM_CYICON : SystemMetric.SM_CYSMICON),

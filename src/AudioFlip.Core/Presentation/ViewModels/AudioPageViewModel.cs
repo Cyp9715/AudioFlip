@@ -30,6 +30,8 @@ public sealed partial class AudioPageViewModel : IDisposable
     [Property] private int _hotkeySelectionStart;
     [Property] private int _isExecuting = 1;
     private IList<object> _selectedDevices = new List<object>();
+    private bool initialized;
+    private bool disposed;
 
     public AudioPageViewModel(
         AudioSwitcher audioSwitcher,
@@ -57,28 +59,41 @@ public sealed partial class AudioPageViewModel : IDisposable
 
     public async Task InitializeAsync(AudioDeviceClass deviceClass, bool watch = true, IList<object>? selectedDevices = null)
     {
+        if (initialized || disposed)
+            return;
+        initialized = true;
         _deviceClass = deviceClass;
         _events.Events += AudioDeviceWatcher_Events;
         _devices.CollectionChanged += Devices_CollectionChanged;
         if (selectedDevices != null)
             _selectedDevices = selectedDevices;
 
-        await _audioSwitcher.LoadAsync();
-
-        foreach (var command in _audioSwitcher.Commands
-            .Where(x => x.DeviceClass == deviceClass)
-            .Select(x => ToViewModel(x)))
+        try
         {
-            Commands.Add(command);
+            await _audioSwitcher.LoadAsync();
+            if (disposed)
+                return;
+
+            foreach (var command in _audioSwitcher.Commands
+                .Where(x => x.DeviceClass == deviceClass)
+                .Select(x => ToViewModel(x)))
+            {
+                Commands.Add(command);
+            }
+
+            SelectedCommand = Commands.First();
+            if (watch)
+                await StartAudioWatcherAsync();
+            if (!disposed)
+                await LoadCommandAsync(SelectedCommand);
         }
-
-        if (watch)
-            await StartAudioWatcherAsync();
-
-        var selectedCommand = Commands.First();
-        SelectDevices(Devices.Where(x => IsDeviceSelected(selectedCommand, x)));
-        SelectedCommand = selectedCommand;
-        --IsExecuting;
+        catch (OperationCanceledException) when (disposed)
+        {
+        }
+        finally
+        {
+            --IsExecuting;
+        }
     }
 
     public Task StartAudioWatcherAsync() =>
@@ -86,15 +101,25 @@ public sealed partial class AudioPageViewModel : IDisposable
 
     public void Dispose()
     {
+        if (disposed)
+            return;
+        disposed = true;
         _events.Events -= AudioDeviceWatcher_Events;
         _devices.CollectionChanged -= Devices_CollectionChanged;
         _audioDeviceWatcher.Dispose();
+        foreach (var device in Devices)
+            device.Img?.Dispose();
     }
 
     public void SaveSelectedCommand()
     {
+        if (!CanExecute())
+            return;
         var command = SelectedCommand;
-        command.DeviceIds = SelectedDevices.Select(x => DeviceReference.Encode(x.Id, x.FullName)).ToArray();
+        command.DeviceIds = DeviceReference.UpdateSelection(
+            command.DeviceIds,
+            GetAvailableDevices(),
+            SelectedDevices.Select(x => new AudioDevice(x.Id, x.FullName)));
         _audioSwitcher.SaveCommand(ToModel(command));
     }
 
@@ -103,7 +128,7 @@ public sealed partial class AudioPageViewModel : IDisposable
     {
         try
         {
-            await _audioSwitcher.ToggleAsync(_deviceClass, SelectedDevices.Select(x => x.Id), _notificationService);
+            await _audioSwitcher.ToggleAsync(_deviceClass, SelectedCommand.DeviceIds, _notificationService);
         }
         catch (Exception e)
         {
@@ -144,7 +169,8 @@ public sealed partial class AudioPageViewModel : IDisposable
             if (newName == null)
                 return;
 
-            _audioSwitcher.RenameCommand(command.Name, newName.Trim(), _deviceClass);
+            newName = newName.Trim();
+            _audioSwitcher.RenameCommand(command.Name, newName, _deviceClass);
             command.Name = newName;
         }
         catch (Exception e)
@@ -220,7 +246,7 @@ public sealed partial class AudioPageViewModel : IDisposable
         {
             Action = CommandType.Set,
             Hotkey = cmd.Hotkey,
-            Devices = SelectedDevices.Select(x => DeviceReference.Encode(x.Id, x.FullName)).ToArray(),
+            Devices = cmd.DeviceIds,
         };
     }
 
@@ -248,6 +274,8 @@ public sealed partial class AudioPageViewModel : IDisposable
 
     public void SetHotkey(Hotkey hotkey, bool persist = true)
     {
+        if (persist && !CanExecute())
+            return;
         if (!hotkey.Modifiers.HasFlag(KeyModifiers.Control)
             && !hotkey.Modifiers.HasFlag(KeyModifiers.Menu))
         {
@@ -279,6 +307,7 @@ public sealed partial class AudioPageViewModel : IDisposable
     public void ToggleShowDisabledDevices()
     {
         _audioSwitcher.SetShowDisabledDevices(!_audioSwitcher.ShowDisabledDevices);
+        using var executing = new ExecutingBlock(this);
         UpdateFilteredDevices();
     }
 
@@ -300,6 +329,8 @@ public sealed partial class AudioPageViewModel : IDisposable
 
     public async Task LoadCommandAsync(AudioCommandViewModel command)
     {
+        using var executing = new ExecutingBlock(this);
+        UpdateFilteredDevices();
         SelectDevices(Devices.Where(x => IsDeviceSelected(command, x)));
         await TrySetHotkeyAsync(command.Hotkey, false);
         Command = GetCmd();
@@ -317,21 +348,25 @@ public sealed partial class AudioPageViewModel : IDisposable
 
     public void SelectDevices(IEnumerable<AudioDeviceViewModel> devices)
     {
+        var selection = devices.Distinct().ToArray();
         _selectedDevices.Clear();
 
-        foreach (var device in devices.Where(x => !_selectedDevices.Contains(x)))
+        foreach (var device in selection)
             _selectedDevices.Add(device);
     }
 
     [CommandInvalidate(nameof(IsExecuting))]
     public bool CanExecute()
     {
-        return IsExecuting == 0;
+        return !disposed && IsExecuting == 0;
     }
 
     private void Devices_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        using var executing = new ExecutingBlock(this);
         UpdateFilteredDevices();
+        SelectDevices(Devices.Where(x => IsDeviceSelected(SelectedCommand, x)));
+        Command = GetCmd();
     }
 
     private void UpdateFilteredDevices()
@@ -363,29 +398,41 @@ public sealed partial class AudioPageViewModel : IDisposable
         }
     }
 
-    private static bool IsDeviceSelected(AudioCommandViewModel command, AudioDeviceViewModel device)
+    private AudioDevice[] GetAvailableDevices() => Devices.Select(x => new AudioDevice(x.Id, x.FullName)).ToArray();
+
+    private bool IsDeviceSelected(AudioCommandViewModel command, AudioDeviceViewModel device)
     {
-        return command.DeviceIds.Any(reference => DeviceReference.IsMatch(reference, new(device.Id, device.FullName)));
+        return command.DeviceIds.Any(reference => DeviceReference.IsMatch(reference, new(device.Id, device.FullName), GetAvailableDevices()));
     }
 
     private void AudioDeviceWatcher_Events(object @event)
     {
         async void Handler()
         {
-            switch (@event)
+            if (disposed)
+                return;
+            try
             {
-                case DefaultAudioDeviceChanged defaultDeviceChanged:
-                    OnEvent(defaultDeviceChanged);
-                    break;
-                case AudioDeviceAdded deviceAdded:
-                    await OnEvent(deviceAdded);
-                    break;
-                case AudioDeviceUpdated deviceUpdated:
-                    OnEvent(deviceUpdated);
-                    break;
-                case AudioDeviceRemoved deviceRemoved:
-                    OnEvent(deviceRemoved);
-                    break;
+                using var executing = new ExecutingBlock(this);
+                switch (@event)
+                {
+                    case DefaultAudioDeviceChanged defaultDeviceChanged when defaultDeviceChanged.DeviceClass == _deviceClass:
+                        OnEvent(defaultDeviceChanged);
+                        break;
+                    case AudioDeviceAdded deviceAdded:
+                        await OnEvent(deviceAdded);
+                        break;
+                    case AudioDeviceUpdated deviceUpdated:
+                        OnEvent(deviceUpdated);
+                        break;
+                    case AudioDeviceRemoved deviceRemoved:
+                        OnEvent(deviceRemoved);
+                        break;
+                }
+            }
+            catch (Exception e)
+            {
+                await _notificationService.ShowNotificationAsync(e.Message);
             }
         }
 
@@ -416,7 +463,11 @@ public sealed partial class AudioPageViewModel : IDisposable
         try
         {
             var deviceInfo = await DeviceInformation.CreateFromIdAsync(device.Id);
-            deviceVm.Img = await deviceInfo.GetThumbnailAsync();
+            var thumbnail = await deviceInfo.GetThumbnailAsync();
+            if (disposed || !Devices.Contains(deviceVm))
+                thumbnail.Dispose();
+            else
+                deviceVm.Img = thumbnail;
         }
         catch
         {
@@ -431,11 +482,15 @@ public sealed partial class AudioPageViewModel : IDisposable
         {
             deviceVm.Update(changes);
             UpdateFilteredDevices();
+            SelectDevices(Devices.Where(x => IsDeviceSelected(SelectedCommand, x)));
+            Command = GetCmd();
         }
     }
 
     private void OnEvent(AudioDeviceRemoved deviceRemoved)
     {
+        foreach (var device in Devices.Where(x => x.Id == deviceRemoved.Id))
+            device.Img?.Dispose();
         Devices.Remove(x => x.Id == deviceRemoved.Id);
     }
 

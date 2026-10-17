@@ -39,10 +39,21 @@ public sealed partial class SettingsPageViewModel
     [Command]
     public async Task SetRunAtStartupAsync()
     {
-        if (!await _audioSwitcher.SetRunAtStartupTask(RunAtStartup))
+        try
         {
-            var message = "Please go to Task Manager > Startup to enable it. Windows only allows you to enable it from the same place where you previously disabled it.";
-            await _io.ShowErrorAsync(message);
+            if (!await _audioSwitcher.SetRunAtStartupTask(RunAtStartup))
+            {
+                var message = "Please go to Task Manager > Startup to enable it. Windows only allows you to enable it from the same place where you previously disabled it.";
+                await _io.ShowErrorAsync(message);
+            }
+        }
+        catch (Exception e)
+        {
+            await _io.ShowErrorAsync(e.Message);
+        }
+        finally
+        {
+            RunAtStartup = _audioSwitcher.RunAtStartup;
         }
     }
 

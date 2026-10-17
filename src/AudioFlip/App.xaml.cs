@@ -10,7 +10,6 @@ using Windows.ApplicationModel;
 using Activation = Windows.ApplicationModel.Activation;
 using PInvoke;
 using Microsoft.UI.Xaml.Controls;
-using System.Reflection.Metadata.Ecma335;
 
 public sealed partial class App : Application, IApp
 {
@@ -73,6 +72,7 @@ public sealed partial class App : Application, IApp
         }
 
         _window = new MainWindow();
+        await _window.InitializeAsync();
 
         var background = AppInstance.GetActivatedEventArgs() is Activation.IStartupTaskActivatedEventArgs task
             && task?.TaskId == AudioSwitcher.StartupTaskId

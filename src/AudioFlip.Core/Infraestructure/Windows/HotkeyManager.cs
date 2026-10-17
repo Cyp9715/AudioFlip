@@ -3,6 +3,8 @@
 namespace AudioFlip;
 
 using AudioFlip.Interop;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
 
 public sealed class HotkeyManager : IHotkeyManager
 {
@@ -15,8 +17,11 @@ public sealed class HotkeyManager : IHotkeyManager
 
     public void RegisterHotkey(int id, Hotkey hotkey)
     {
-        if (hotkey != null)
-            User32.RegisterHotKey(hwnd, id, hotkey.Modifiers.ToModifiers(), (uint)hotkey.Key);
+        if (!User32.RegisterHotKey(hwnd, id, hotkey.Modifiers.ToModifiers() | User32.Modifiers.MOD_NOREPEAT, (uint)hotkey.Key))
+        {
+            var error = new Win32Exception(Marshal.GetLastWin32Error());
+            throw new AudioSwitcherException($"Could not register hotkey '{hotkey}': {error.Message}");
+        }
     }
 
     public void UnregisterHotkey(int id)

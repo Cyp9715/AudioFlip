@@ -27,7 +27,6 @@ public sealed class WinShellNotifyIcon
         if (created)
             return;
 
-        created = true;
         notifyIconData = new()
         {
             hWnd = hwnd,
@@ -38,7 +37,7 @@ public sealed class WinShellNotifyIcon
             uFlags = Shell32.NIF_ICON | Shell32.NIF_MESSAGE | Shell32.NIF_TIP,
             uCallbackMessage = (int)NotifyIconCallbackId,
         };
-        Shell32.Shell_NotifyIcon(Shell32.NIM_ADD, in notifyIconData);
+        created = Shell32.Shell_NotifyIcon(Shell32.NIM_ADD, in notifyIconData);
     }
 
     public void OnTaskBarCreated()

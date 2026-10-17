@@ -13,6 +13,8 @@ public sealed partial class MainWindow : DesktopWindow
     private readonly Frame frame;
     private readonly AudioSwitcher audioSwitcher;
     private readonly IAudioManager audioManager;
+    private bool exiting;
+    private bool openingNotifyMenu;
 
     public MainWindow()
         : base(AudioSwitcherState.Title, "AudioSwitch.ico")
@@ -26,12 +28,25 @@ public sealed partial class MainWindow : DesktopWindow
         InitializeComponent();
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(TitleBar);
-        NavView.SelectedItem = NavView.MenuItems.First();
         NavView.Content = frame;
+        Closed += (_, _) =>
+        {
+            if (frame.Content is IDisposable page)
+                page.Dispose();
+            audioSwitcher.Dispose();
+        };
     }
 
     public UIElement TitleBar => CustomTitleBar;
     internal static MainWindow? Instance { get; private set; }
+
+    public async Task InitializeAsync()
+    {
+        // Load startup preferences before App decides whether to show a window.
+        await audioSwitcher.LoadAsync();
+        App.Current.UpdateTheme();
+        NavView.SelectedItem = NavView.MenuItems.First();
+    }
 
     public void RunInBackround()
     {
@@ -41,7 +56,7 @@ public sealed partial class MainWindow : DesktopWindow
 
     protected override bool OnClose()
     {
-        if (!audioSwitcher.RunInBackground)
+        if (exiting || !audioSwitcher.RunInBackground)
             return true;
 
         Hide();
@@ -50,16 +65,15 @@ public sealed partial class MainWindow : DesktopWindow
 
     protected override async void OnHotkey(int id, KeyModifiers modifiers, Key key)
     {
-        var audioPage = frame.Content as AudioPage;
-
-        if (audioPage != null && audioPage.IsHotKeyFocused() && IsActive)
-        {
-            await audioPage.ViewModel.TrySetHotkeyAsync(new(modifiers, key));
-            return;
-        }
-
         try
         {
+            var audioPage = frame.Content as AudioPage;
+            if (audioPage != null && audioPage.IsHotKeyFocused() && IsActive)
+            {
+                await audioPage.ViewModel.TrySetHotkeyAsync(new(modifiers, key));
+                return;
+            }
+
             await audioSwitcher.ExecuteCommandByHotkeyAsync(new Hotkey(modifiers, key));
         }
         catch (Exception e)
@@ -70,15 +84,31 @@ public sealed partial class MainWindow : DesktopWindow
 
     protected override async void OnShellNotifyIconMessage(PInvoke.User32.WindowMessage id)
     {
-        switch (id)
+        try
         {
-            case PInvoke.User32.WindowMessage.WM_LBUTTONDBLCLK:
-                Restore();
-                PInvoke.User32.SetForegroundWindow(Hwnd);
-                break;
-            case PInvoke.User32.WindowMessage.WM_RBUTTONUP:
-                await OpenNotifyMenuAsync();
-                break;
+            switch (id)
+            {
+                case PInvoke.User32.WindowMessage.WM_LBUTTONDBLCLK:
+                    Restore();
+                    PInvoke.User32.SetForegroundWindow(Hwnd);
+                    break;
+                case PInvoke.User32.WindowMessage.WM_RBUTTONUP when !openingNotifyMenu:
+                    openingNotifyMenu = true;
+                    try
+                    {
+                        await OpenNotifyMenuAsync();
+                    }
+                    finally
+                    {
+                        openingNotifyMenu = false;
+                    }
+
+                    break;
+            }
+        }
+        catch (Exception e)
+        {
+            await NotificationService.ShowErrorNotificationAsync(e.Message);
         }
     }
 
@@ -96,7 +126,11 @@ public sealed partial class MainWindow : DesktopWindow
 
         if (!menu.IsEmpty)
             menu.Add(null);
-        menu.Add(new("&Exit", () => Close()));
+        menu.Add(new("&Exit", () =>
+        {
+            exiting = true;
+            Close();
+        }));
         menu.Track();
 
         bool HasVisibleDevices(IEnumerable<AudioDevice> devices)
@@ -117,7 +151,14 @@ public sealed partial class MainWindow : DesktopWindow
                 var isDisabled = !audioManager.IsActive(device.Id);
                 async void Callback()
                 {
-                    await audioSwitcher.ToggleAsync(deviceClass, new[] { device.Id }, new NoNotificationService());
+                    try
+                    {
+                        await audioSwitcher.ToggleAsync(deviceClass, new[] { device.Id }, new NoNotificationService());
+                    }
+                    catch (Exception e)
+                    {
+                        await NotificationService.ShowErrorNotificationAsync(e.Message);
+                    }
                 }
 
                 menu.Add(new(device.Name, Callback, isDefault, isDisabled));
