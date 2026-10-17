@@ -11,41 +11,46 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" IsEnabled="{x:Bind ViewModel.CanTransfer, Mode=OneWay}">
-        <StackPanel Orientation="Vertical" Spacing="4">
-        <local:SettingsPageEntry Title="Dark theme" Reason="" IsChecked="{x:Bind ViewModel.DarkTheme, Mode=TwoWay}" Command="{x:Bind ViewModel.SetDarkThemeCommand}" />
-        <local:SettingsPageEntry Title="Run in background" Reason="Required to support global hotkeys" IsChecked="{x:Bind ViewModel.RunInBackground, Mode=TwoWay}" Command="{x:Bind ViewModel.SetRunInBackgroundCommand}" />
-        <local:SettingsPageEntry Title="Run at startup" Reason="Required to support global hotkeys" IsChecked="{x:Bind ViewModel.RunAtStartup, Mode=TwoWay}" Command="{x:Bind ViewModel.SetRunAtStartupAsyncCommand}" />
-        <local:SettingsPageEntry Title="Run at startup minimized" IsChecked="{x:Bind ViewModel.RunAtStartupMinimized, Mode=TwoWay}" Command="{x:Bind ViewModel.SetRunAtStartupMinimizedCommand}" />
-        <local:SettingsPageEntry Title="Switch communication device" Reason="" IsChecked="{x:Bind ViewModel.SwitchCommunicationDevice, Mode=TwoWay}" Command="{x:Bind ViewModel.SetSwitchCommunicationDeviceCommand}" />
-        <local:SettingsPageEntry Title="Show disabled devices" Reason="" IsChecked="{x:Bind ViewModel.ShowDisabledDevices, Mode=TwoWay}" Command="{x:Bind ViewModel.SetShowDisabledDevicesCommand}" />
-        <Grid ColumnSpacing="7" Margin="0,16,0,0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <Button Grid.Column="0" HorizontalAlignment="Stretch" Background="Transparent" Command="{x:Bind ViewModel.ExportAsyncCommand}">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <SymbolIcon Symbol="Save" />
-                    <TextBlock Text="Export…" />
-                </StackPanel>
-            </Button>
-            <Button Grid.Column="1" HorizontalAlignment="Stretch" Background="Transparent" Command="{x:Bind ViewModel.ImportAsyncCommand}">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <SymbolIcon Symbol="OpenFile" />
-                    <TextBlock Text="Import…" />
-                </StackPanel>
-            </Button>
-        </Grid>
-        </StackPanel>
+            <StackPanel Orientation="Vertical" Spacing="4">
+                <local:SettingsPageEntry Title="Dark theme" Reason="" IsChecked="{x:Bind ViewModel.DarkTheme, Mode=TwoWay}" Command="{x:Bind ViewModel.SetDarkThemeCommand}" />
+                <local:SettingsPageEntry Title="Run in background" Reason="Required to support global hotkeys" IsChecked="{x:Bind ViewModel.RunInBackground, Mode=TwoWay}" Command="{x:Bind ViewModel.SetRunInBackgroundCommand}" />
+                <local:SettingsPageEntry Title="Run at startup" Reason="Required to support global hotkeys" IsChecked="{x:Bind ViewModel.RunAtStartup, Mode=TwoWay}" Command="{x:Bind ViewModel.SetRunAtStartupAsyncCommand}" />
+                <local:SettingsPageEntry Title="Run at startup minimized" IsChecked="{x:Bind ViewModel.RunAtStartupMinimized, Mode=TwoWay}" Command="{x:Bind ViewModel.SetRunAtStartupMinimizedCommand}" />
+                <local:SettingsPageEntry Title="Switch communication device" Reason="" IsChecked="{x:Bind ViewModel.SwitchCommunicationDevice, Mode=TwoWay}" Command="{x:Bind ViewModel.SetSwitchCommunicationDeviceCommand}" />
+                <local:SettingsPageEntry Title="Show disabled devices" Reason="" IsChecked="{x:Bind ViewModel.ShowDisabledDevices, Mode=TwoWay}" Command="{x:Bind ViewModel.SetShowDisabledDevicesCommand}" />
+            </StackPanel>
         </ScrollViewer>
-        <local:CommandBar Grid.Row="1" Label="Export"
-                          CommandText="{x:Bind ViewModel.ExportCommandText, Mode=OneWay}"
-                          CopyCommand="{x:Bind ViewModel.CopyExportCommandToClipboardCommand}" />
-        <local:CommandBar Grid.Row="2" Label="Import"
-                          CommandText="{x:Bind ViewModel.ImportCommandText, Mode=OneWay}"
-                          CopyCommand="{x:Bind ViewModel.CopyImportCommandToClipboardCommand}" />
+        <StackPanel Grid.Row="1" Spacing="7">
+            <Grid ColumnSpacing="7">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Button Grid.Column="0" HorizontalAlignment="Stretch" Background="Transparent"
+                        IsEnabled="{x:Bind ViewModel.CanTransfer, Mode=OneWay}"
+                        Command="{x:Bind ViewModel.ExportAsyncCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <SymbolIcon Symbol="Save" />
+                        <TextBlock Text="Export…" />
+                    </StackPanel>
+                </Button>
+                <Button Grid.Column="1" HorizontalAlignment="Stretch" Background="Transparent"
+                        IsEnabled="{x:Bind ViewModel.CanTransfer, Mode=OneWay}"
+                        Command="{x:Bind ViewModel.ImportAsyncCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <SymbolIcon Symbol="OpenFile" />
+                        <TextBlock Text="Import…" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+            <local:CommandBar Label="Export"
+                              CommandText="{x:Bind ViewModel.ExportCommandText, Mode=OneWay}"
+                              CopyCommand="{x:Bind ViewModel.CopyExportCommandToClipboardCommand}" />
+            <local:CommandBar Label="Import"
+                              CommandText="{x:Bind ViewModel.ImportCommandText, Mode=OneWay}"
+                              CopyCommand="{x:Bind ViewModel.CopyImportCommandToClipboardCommand}" />
+        </StackPanel>
     </Grid>
 </Page>
