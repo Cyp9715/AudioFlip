@@ -23,12 +23,12 @@
             </StackPanel>
         </ScrollViewer>
         <StackPanel Grid.Row="1" Spacing="7">
-            <local:CommandBar Label="Export…"
+            <local:CommandBar Label="Export"
                               IsEnabled="{x:Bind ViewModel.CanTransfer, Mode=OneWay}"
                               LabelCommand="{x:Bind ViewModel.ExportAsyncCommand}"
                               CommandText="{x:Bind ViewModel.ExportCommandText, Mode=OneWay}"
                               CopyCommand="{x:Bind ViewModel.CopyExportCommandToClipboardCommand}" />
-            <local:CommandBar Label="Import…"
+            <local:CommandBar Label="Import"
                               IsEnabled="{x:Bind ViewModel.CanTransfer, Mode=OneWay}"
                               LabelCommand="{x:Bind ViewModel.ImportAsyncCommand}"
                               CommandText="{x:Bind ViewModel.ImportCommandText, Mode=OneWay}"
