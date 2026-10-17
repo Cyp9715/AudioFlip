@@ -287,11 +287,7 @@ public sealed partial class AudioSwitcher : IDisposable
         if (task != null)
             state.RunAtStartup = await task.IsEnabledAsync();
 
-        if (!Commands.Any(x => x.DeviceClass == AudioDeviceClass.Render))
-            state.Commands.Add(new("Default command", AudioDeviceClass.Render));
-
-        if (!Commands.Any(x => x.DeviceClass == AudioDeviceClass.Capture))
-            state.Commands.Add(new("Default recording command", AudioDeviceClass.Capture));
+        state.EnsureDefaultCommands();
 
         var errors = UpdateHotkeys();
         if (errors.Count > 0)

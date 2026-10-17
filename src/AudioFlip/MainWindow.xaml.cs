@@ -15,6 +15,7 @@ public sealed partial class MainWindow : DesktopWindow
     private readonly IAudioManager audioManager;
     private bool exiting;
     private bool openingNotifyMenu;
+    private SettingsImportPipe? importPipe;
 
     public MainWindow()
         : base(AudioSwitcherState.Title, "AudioSwitch.ico")
@@ -31,6 +32,7 @@ public sealed partial class MainWindow : DesktopWindow
         NavView.Content = frame;
         Closed += (_, _) =>
         {
+            importPipe?.Dispose();
             if (frame.Content is IDisposable page)
                 page.Dispose();
             audioSwitcher.Dispose();
@@ -46,6 +48,7 @@ public sealed partial class MainWindow : DesktopWindow
         await audioSwitcher.LoadAsync();
         App.Current.UpdateTheme();
         NavView.SelectedItem = NavView.MenuItems.First();
+        importPipe = new SettingsImportPipe(App.ImportPipeName, ImportSettingsAsync);
     }
 
     public void RunInBackround()
@@ -112,6 +115,32 @@ public sealed partial class MainWindow : DesktopWindow
         }
     }
 
+    private Task<IReadOnlyList<string>> ImportSettingsAsync(AudioSwitcherState state)
+    {
+        var result = new TaskCompletionSource<IReadOnlyList<string>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!DispatcherQueue.TryEnqueue(async () =>
+        {
+            try
+            {
+                var warnings = await audioSwitcher.ImportSettingsAsync(state);
+                if (frame.Content is IDisposable page)
+                    page.Dispose();
+                App.Current.UpdateTheme();
+                NavigateToSelectedPage();
+                result.SetResult(warnings);
+            }
+            catch (Exception e)
+            {
+                result.SetException(e);
+            }
+        }))
+        {
+            result.SetException(new AudioSwitcherException("AudioFlip is closing. Retry the import."));
+        }
+
+        return result.Task;
+    }
+
     private async Task OpenNotifyMenuAsync()
     {
         var menu = new WinMenu(Hwnd);
@@ -176,7 +205,18 @@ public sealed partial class MainWindow : DesktopWindow
 
     private void NavView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
-        if (args.SelectedItem is NavigationViewItem item && item.Content is string content)
+        NavigateToSelectedPage();
+    }
+
+    private void NavigateToSelectedPage()
+    {
+        if (NavView.SelectedItem == NavView.SettingsItem)
+        {
+            frame.Navigate(typeof(SettingsPage), this);
+            return;
+        }
+
+        if (NavView.SelectedItem is NavigationViewItem item && item.Content is string content)
         {
             switch (content)
             {
@@ -190,10 +230,6 @@ public sealed partial class MainWindow : DesktopWindow
                     frame.Navigate(typeof(AboutPage));
                     break;
             }
-        }
-        else if (args.IsSettingsSelected)
-        {
-            frame.Navigate(typeof(SettingsPage), this);
         }
     }
 }

@@ -11,6 +11,7 @@ public sealed partial class SettingsPageViewModel
     private readonly IO _io;
     private readonly IApp app;
     private readonly ISettingsTransfer transfer;
+    private readonly IClipboard clipboard;
     [Property] private bool _runInBackground;
     [Property] private bool _runAtStartup;
     [Property] private bool _runAtStartupMinimized;
@@ -18,14 +19,18 @@ public sealed partial class SettingsPageViewModel
     [Property] private bool _showDisabledDevices;
     [Property] private bool _darkTheme;
     [Property] private bool _canTransfer = true;
+    [Property] private string _exportCommandText = string.Empty;
+    [Property] private string _importCommandText = string.Empty;
 
-    public SettingsPageViewModel(AudioSwitcher audioSwitcher, IO io, IApp app, ISettingsTransfer transfer)
+    public SettingsPageViewModel(AudioSwitcher audioSwitcher, IO io, IApp app, ISettingsTransfer transfer, IClipboard clipboard)
     {
         _audioSwitcher = audioSwitcher;
         _io = io;
         this.app = app;
         this.transfer = transfer;
+        this.clipboard = clipboard;
         OnInitialize();
+        UpdateCommands(transfer.LastPath ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "AudioFlip-backup.json"));
     }
 
     public async Task LoadAsync()
@@ -84,7 +89,10 @@ public sealed partial class SettingsPageViewModel
             var backup = new SettingsBackup { Settings = _audioSwitcher.ExportSettings() };
             var name = await transfer.ExportAsync(backup.ToJson(), $"AudioFlip-backup-{DateTime.Now:yyyyMMdd-HHmmss}");
             if (name != null)
-                await _io.ShowMessageAsync("Export complete", $"Settings saved to {name}.\n\nBefore reinstalling Windows, keep this file on another drive or in a backed-up cloud folder.");
+            {
+                UpdateCommands(name);
+                await _io.ShowMessageAsync("Export complete", name);
+            }
         }
         catch (Exception e)
         {
@@ -105,10 +113,11 @@ public sealed partial class SettingsPageViewModel
         try
         {
             await _audioSwitcher.LoadAsync();
-            var json = await transfer.ReadImportAsync();
-            if (json == null)
+            var file = await transfer.ReadImportAsync();
+            if (file == null)
                 return;
-            var backup = SettingsBackup.Parse(json);
+            var backup = SettingsBackup.Parse(file.Contents);
+            UpdateCommands(file.Path);
             var playback = await _audioSwitcher.AudioManager.GetAllDevicesAsync(AudioDeviceClass.Render);
             var recording = await _audioSwitcher.AudioManager.GetAllDevicesAsync(AudioDeviceClass.Capture);
             var plan = new SettingsImportPlan(backup, playback, recording);
@@ -118,11 +127,11 @@ public sealed partial class SettingsPageViewModel
             var errors = await _audioSwitcher.ImportSettingsAsync(plan.BuildState());
             await LoadAsync();
             app.UpdateTheme();
-            var message = "Commands, hotkeys, and app preferences have been restored.\n\nRun at startup keeps this Windows installation's current permission. Check it above if needed.";
+            var message = $"Imported {backup.Settings.Commands.Count} commands.";
             if (plan.Devices.Any(x => x.SelectedOption.Device == null && !x.SelectedOption.Omit))
-                message += "\n\nUnavailable selections were kept. They are skipped until they match a connected device. Review devices with duplicate names before using a command.";
+                message += "\nUnavailable device selections were kept.";
             if (errors.Count > 0)
-                message += "\n\nThese hotkeys could not be registered. Their commands were kept; choose different hotkeys or close the other app using them:\n" + string.Join("\n", errors);
+                message += "\n\nHotkeys already in use:\n" + string.Join("\n", errors);
             await _io.ShowMessageAsync("Import complete", message);
         }
         catch (Exception e)
@@ -133,5 +142,15 @@ public sealed partial class SettingsPageViewModel
         {
             CanTransfer = true;
         }
+    }
+
+    [Command] public void CopyExportCommandToClipboard() => clipboard.SetTextContent(ExportCommandText);
+    [Command] public void CopyImportCommandToClipboard() => clipboard.SetTextContent(ImportCommandText);
+
+    private void UpdateCommands(string path)
+    {
+        transfer.LastPath = path;
+        ExportCommandText = CLI.BuildSettingsCommand(path, import: false);
+        ImportCommandText = CLI.BuildSettingsCommand(path, import: true);
     }
 }
