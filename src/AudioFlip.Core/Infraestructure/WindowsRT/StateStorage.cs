@@ -17,4 +17,6 @@ public sealed class StateStorage : IStateStorage
     public AudioSwitcherState Load() => storage.Load();
 
     public void Save(AudioSwitcherState state) => storage.Save(state);
+
+    public void SaveImportBackup(AudioSwitcherState state) => storage.SaveImportBackup(state);
 }

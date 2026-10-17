@@ -50,8 +50,22 @@ internal sealed class TestStorage : IStateStorage
     public AudioSwitcherState State { get; } = new();
     public int Loads { get; private set; }
     public int Saves { get; private set; }
+    public bool FailSave { get; set; }
+    public bool FailImportBackup { get; set; }
+    public AudioSwitcherState? ImportBackup { get; private set; }
     public AudioSwitcherState Load() { ++Loads; return State; }
-    public void Save(AudioSwitcherState state) { ++Saves; }
+    public void Save(AudioSwitcherState state)
+    {
+        if (FailSave)
+            throw new IOException("Test save failed.");
+        ++Saves;
+    }
+    public void SaveImportBackup(AudioSwitcherState state)
+    {
+        if (FailImportBackup)
+            throw new IOException("Test backup failed.");
+        ImportBackup = SettingsBackup.Copy(state);
+    }
 }
 
 internal sealed class TestHotkeyManager : IHotkeyManager

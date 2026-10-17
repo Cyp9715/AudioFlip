@@ -24,13 +24,13 @@ public sealed class JsonFileStateStorage : IStateStorage
             catch (Exception e) when (e is JsonException or InvalidDataException)
             {
                 if (File.Exists(path + ".bak"))
-                    return Read(path + ".bak");
+                    return RecoverBackup();
                 throw new AudioSwitcherException($"Saved settings at '{path}' are invalid. Restore a backup before restarting AudioFlip.");
             }
         }
 
         if (File.Exists(path + ".bak"))
-            return Read(path + ".bak");
+            return RecoverBackup();
 
         var legacy = readLegacySettings?.Invoke();
         if (string.IsNullOrWhiteSpace(legacy))
@@ -44,15 +44,60 @@ public sealed class JsonFileStateStorage : IStateStorage
     public void Save(AudioSwitcherState state)
     {
         Validate(state);
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        var temporaryPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+
+        // Never rotate corrupt data over the last known-good backup, including
+        // when a file was damaged after the application loaded it.
+        var preservePrevious = false;
+        if (File.Exists(path))
+        {
+            try
+            {
+                Read(path);
+                preservePrevious = true;
+            }
+            catch (Exception e) when (e is JsonException or InvalidDataException)
+            {
+            }
+        }
+
+        WriteAtomic(path, JsonSerializer.Serialize(state), preservePrevious ? path + ".bak" : null);
+    }
+
+    public void SaveImportBackup(AudioSwitcherState state)
+    {
+        var backup = new SettingsBackup { Settings = SettingsBackup.Copy(state) };
+        var backupPath = Path.Combine(Path.GetDirectoryName(path)!, "settings.before-import.json");
+        WriteAtomic(backupPath, backup.ToJson());
+    }
+
+    private AudioSwitcherState RecoverBackup()
+    {
+        var recovered = Read(path + ".bak");
+        WriteAtomic(path, JsonSerializer.Serialize(recovered));
+        return recovered;
+    }
+
+    private static void WriteAtomic(string destination, string json, string? backupPath = null)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+        var temporaryPath = destination + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
-            File.WriteAllText(temporaryPath, JsonSerializer.Serialize(state));
-            if (File.Exists(path))
-                File.Replace(temporaryPath, path, path + ".bak");
+            using (var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                using (var writer = new StreamWriter(stream, leaveOpen: true))
+                {
+                    writer.Write(json);
+                    writer.Flush();
+                }
+
+                stream.Flush(flushToDisk: true);
+            }
+
+            if (File.Exists(destination))
+                File.Replace(temporaryPath, destination, backupPath);
             else
-                File.Move(temporaryPath, path);
+                File.Move(temporaryPath, destination);
         }
         finally
         {

@@ -51,7 +51,10 @@ public sealed class StateStorageTests : IDisposable
         storage.Save(new() { DarkTheme = true });
         File.WriteAllText(path, corrupt);
         Assert.False(storage.Load().DarkTheme);
-        Assert.Equal(corrupt, File.ReadAllText(path));
+        Assert.False(JsonSerializer.Deserialize<AudioSwitcherState>(File.ReadAllText(path))!.DarkTheme);
+        storage.Save(new() { DarkTheme = true });
+        File.WriteAllText(path, "{");
+        Assert.False(new JsonFileStateStorage(path).Load().DarkTheme);
     }
 
     [Fact]
@@ -85,6 +88,35 @@ public sealed class StateStorageTests : IDisposable
         Assert.True(storage.Load().DarkTheme);
         Assert.False(JsonSerializer.Deserialize<AudioSwitcherState>(File.ReadAllText(path + ".bak"))!.DarkTheme);
         Assert.Empty(Directory.GetFiles(directory, "*.tmp"));
+    }
+
+    [Fact]
+    public void CorruptionAfterLoadingDoesNotReplaceTheGoodBackupOnSave()
+    {
+        var path = Path.Combine(directory, "settings.json");
+        var storage = new JsonFileStateStorage(path);
+        storage.Save(new() { DarkTheme = false });
+        storage.Save(new() { DarkTheme = true });
+        File.WriteAllText(path, "{");
+        storage.Save(new() { DarkTheme = true });
+        Assert.False(JsonSerializer.Deserialize<AudioSwitcherState>(File.ReadAllText(path + ".bak"))!.DarkTheme);
+    }
+
+    [Fact]
+    public void ImportRestorePointIsPortableAndSurvivesOrdinarySaves()
+    {
+        var storage = new JsonFileStateStorage(Path.Combine(directory, "settings.json"));
+        var original = new AudioSwitcherState
+        {
+            DarkTheme = false,
+            Commands = [new("Output", AudioDeviceClass.Render), new("Input", AudioDeviceClass.Capture)],
+        };
+        storage.SaveImportBackup(original);
+        storage.Save(new() { DarkTheme = true });
+        storage.Save(new() { DarkTheme = true });
+        var restored = SettingsBackup.Parse(File.ReadAllText(Path.Combine(directory, "settings.before-import.json")));
+        Assert.False(restored.Settings.DarkTheme);
+        Assert.Equal(2, restored.Settings.Commands.Count);
     }
 
     public void Dispose()

@@ -5,6 +5,7 @@ namespace AudioFlip;
 public sealed class InMemoryStateStorage : IStateStorage
 {
     private AudioSwitcherState state = new();
+    public AudioSwitcherState? ImportBackup { get; private set; }
 
     public AudioSwitcherState Load()
     {
@@ -15,4 +16,6 @@ public sealed class InMemoryStateStorage : IStateStorage
     {
         this.state = state;
     }
+
+    public void SaveImportBackup(AudioSwitcherState state) => ImportBackup = SettingsBackup.Copy(state);
 }
