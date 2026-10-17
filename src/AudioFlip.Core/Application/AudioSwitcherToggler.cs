@@ -33,7 +33,7 @@ public sealed class AudioSwitcherToggler
                 continue;
 
             var device = availableDevices.FirstOrDefault(x => x.Id == deviceId);
-            var deviceName = device?.Name ?? deviceId;
+            var deviceName = device?.Name ?? DeviceReference.GetSavedName(deviceId) ?? deviceId;
 
             if (device == null)
             {

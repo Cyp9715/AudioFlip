@@ -21,6 +21,18 @@ AudioFlip is a Windows utility for quickly switching the system default audio de
 
 This is especially useful when moving between gaming, calls, streaming, and work setups where audio output/input devices need to change frequently, and it is particularly helpful for dynamically switching microphone and headset setups in Discord.
 
+## Back up and restore settings
+
+Open **Settings → Export…** to save commands, device selections, hotkeys, and app preferences to an AudioFlip JSON backup. Keep that file on another drive, a USB drive, or a backed-up cloud folder before reinstalling Windows. AudioFlip's local app data and automatic backups can be erased along with Windows.
+
+On the new Windows installation or another PC, install AudioFlip and the device drivers, connect the devices, then open **Settings → Import…**. Review the device mappings before confirming. Surviving device IDs take priority; a unique matching name is suggested when IDs have changed. Playback and recording are matched separately. If a driver changes the name, or multiple devices share a name, choose the correct device manually from the list. IDs are not guaranteed to identify the same physical device across PCs.
+
+Import replaces the current command list and app preferences. It does not change the Windows default audio device or the OS permission to run at startup. If another program already owns an imported hotkey, the command is kept and AudioFlip reports the conflict so you can choose another shortcut.
+
+Unavailable selections are kept unless you explicitly remove them in the preview. They are skipped until their saved ID or unique name matches a device again; reconnecting alone does not switch the system audio device. A name match cannot prove physical identity, so review same-named devices before using a command.
+
+The settings from immediately before the last import are saved as `settings.before-import.json` in the package's `LocalState` folder, in the same portable format. Ordinary saves do not rotate this file; another import replaces it. Select it with **Import…** to undo an import. This local restore point is separate from an exported backup and does not survive wiping Windows.
+
 ## Platform and development
 
 AudioFlip uses **WinUI 3**, Windows App SDK 1.7, and .NET 10. The supported OS baseline remains **Windows 11 24H2 (build 26100)**. The app and its MSIX packaging project are separate projects in `AudioFlip.slnx`.
@@ -37,8 +49,10 @@ From PowerShell in the repository root:
 
 Builds produce **unsigned** bundles in `AppPackages/`. Sign a bundle with your own trusted certificate before installing it, or submit the unsigned bundle through the Store publishing process. CI runs the regression tests and builds both architectures without installing audio drivers, accessing signing secrets, or publishing to the Store.
 
-The tests cover endpoint ID changes, disconnected device selections, independent playback/recording command names, shared hotkeys, command-line quoting, switching order, notifications, and native COM signatures. They use simulated audio devices and do not change the computer's audio configuration.
+The tests cover endpoint ID changes, disconnected device selections, independent playback/recording command names, shared hotkeys, command-line quoting, switching order, notifications, native COM signatures, portable import/export, and recovery after settings corruption. They use simulated audio devices and do not change the computer's audio configuration.
 
 Settings are stored in `settings.json` in the package's local app data folder. The previous complete save is retained as `settings.json.bak`. Existing settings from earlier AudioFlip releases are imported automatically, and the original local-settings value is retained. This avoids the 8 KB limit on a single Windows setting value.
+
+New device selections retain their full endpoint ID and friendly name. Older name/hash references remain readable; imports do not trust a legacy hash as a cross-PC identity.
 
 Before distributing a release, also check the app with real devices: unplug/reconnect selected devices, switch playback and recording using a shared hotkey, close to the tray and restore by double-click, dismiss the tray menu by clicking outside it, exit from the tray, and verify startup visibility with both startup settings. These checks require an installed, signed package and interactive Windows session.

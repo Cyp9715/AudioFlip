@@ -107,6 +107,7 @@ public sealed partial class App : Application, IApp
         services.AddSingleton<IStartupTaskManager, WinStartupTaskManager>();
         services.AddSingleton<IStateStorage, StateStorage>();
         services.AddSingleton<IO, WinIO>();
+        services.AddSingleton<ISettingsTransfer, WinSettingsTransfer>();
         services.AddSingleton(x => MainWindow.Instance?.DispatcherQueue ?? throw new ArgumentNullException());
         services.AddSingleton<INotificationService, NotificationService>();
         services.AddSingleton<IHotkeyManager>(x => new HotkeyManager(MainWindow.SharedHwnd));

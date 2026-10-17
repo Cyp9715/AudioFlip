@@ -6,7 +6,7 @@ public sealed record AudioSwitcherState
 {
     public static string ForkedRepository { get; } = "https://github.com/Cyp9715/AudioFlip";
     public static string Title { get; } = "AudioFlip";
-    public static string Version { get; } = "1.0.7";
+    public static string Version { get; } = "1.1.0";
     public List<Command> Commands { get; set; } = new();
     public bool RunAtStartup { get; set; } = true;
     public bool RunAtStartupMinimized { get; set; } = true;

@@ -53,6 +53,40 @@ public sealed partial class AudioSwitcher : IDisposable
         stateStorage.Save(state);
     }
 
+    public AudioSwitcherState ExportSettings() => SettingsBackup.Copy(state);
+
+    public async Task<IReadOnlyList<string>> ImportSettingsAsync(AudioSwitcherState imported)
+    {
+        SettingsBackup.Validate(imported);
+        await LoadAsync();
+        await executionLock.WaitAsync();
+        var previous = state;
+        try
+        {
+            // The OS owns startup permission. Import never grants or revokes it.
+            var replacement = SettingsBackup.Copy(imported) with { RunAtStartup = previous.RunAtStartup };
+            stateStorage.SaveImportBackup(previous);
+            state = replacement;
+
+            // Keep old registrations until saving succeeds so a failed import
+            // cannot lose a working hotkey to another process during rollback.
+            var errors = UpdateHotkeys(removeObsolete: false);
+            Save();
+            RemoveObsoleteHotkeys();
+            return errors;
+        }
+        catch
+        {
+            state = previous;
+            RemoveObsoleteHotkeys();
+            throw;
+        }
+        finally
+        {
+            executionLock.Release();
+        }
+    }
+
     public Command AddCommand(CommandName name, AudioDeviceClass deviceClass, Hotkey? hotkey = null, string[]? devices = null)
     {
         EnsureNameIsAvailable(name, deviceClass);
@@ -264,7 +298,7 @@ public sealed partial class AudioSwitcher : IDisposable
             await notificationService.ShowNotificationAsync(string.Join(Environment.NewLine, errors));
     }
 
-    private List<string> UpdateHotkeys()
+    private void RemoveObsoleteHotkeys()
     {
         var desired = Commands.Select(x => x.Hotkey).Where(x => x != Hotkey.Empty).Distinct().ToArray();
         foreach (var hotkey in registeredHotkeys.Keys.Except(desired).ToArray())
@@ -272,7 +306,14 @@ public sealed partial class AudioSwitcher : IDisposable
             hotkeyManager.UnregisterHotkey(registeredHotkeys[hotkey]);
             registeredHotkeys.Remove(hotkey);
         }
+    }
 
+    private List<string> UpdateHotkeys(bool removeObsolete = true)
+    {
+        if (removeObsolete)
+            RemoveObsoleteHotkeys();
+
+        var desired = Commands.Select(x => x.Hotkey).Where(x => x != Hotkey.Empty).Distinct().ToArray();
         var errors = new List<string>();
         foreach (var hotkey in desired.Where(x => !registeredHotkeys.ContainsKey(x)))
         {
@@ -288,7 +329,7 @@ public sealed partial class AudioSwitcher : IDisposable
             }
             catch (AudioSwitcherException e)
             {
-                errors.Add(e.Message);
+                errors.Add($"{hotkey}: {e.Message}");
             }
         }
 

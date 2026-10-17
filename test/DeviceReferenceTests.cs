@@ -37,6 +37,30 @@ public sealed class DeviceReferenceTests
         Assert.Equal("A", id);
     }
 
+    [Fact]
+    public void NewReferencesDoNotTreatLegacyHashCollisionsAsAnIdentity()
+    {
+        Assert.Equal("A0".GetDjb2HashCode(), "A1".GetDjb2HashCode());
+        var reference = DeviceReference.Encode("A0", "Headset");
+        Assert.False(DeviceReference.TryResolveId(reference, [new("A1", "Unrelated monitor")], out _));
+    }
+
+    [Fact]
+    public void FullReferencesRoundTripEscapedIdsAndNames()
+    {
+        var reference = DeviceReference.Encode("{id}|50%/한글", "USB | 50% 헤드셋");
+        Assert.Equal("{id}|50%/한글", DeviceReference.GetSavedId(reference));
+        Assert.Equal("USB | 50% 헤드셋", DeviceReference.GetSavedName(reference));
+    }
+
+    [Fact]
+    public void LegacyNameAndHashReferencesRemainCompatible()
+    {
+        var reference = $"ref|Headset|{"A".GetDjb2HashCode()}";
+        Assert.True(DeviceReference.TryResolveId(reference, [new("A", "Headset")], out var id));
+        Assert.Equal("A", id);
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("ref|Headset|invalid")]

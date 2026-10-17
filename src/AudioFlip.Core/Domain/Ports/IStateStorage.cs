@@ -6,4 +6,5 @@ public interface IStateStorage
 {
     AudioSwitcherState Load();
     void Save(AudioSwitcherState state);
+    void SaveImportBackup(AudioSwitcherState state);
 }
