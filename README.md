@@ -39,4 +39,6 @@ Builds produce **unsigned** bundles in `AppPackages/`. Sign a bundle with your o
 
 The tests cover endpoint ID changes, disconnected device selections, independent playback/recording command names, shared hotkeys, command-line quoting, switching order, notifications, and native COM signatures. They use simulated audio devices and do not change the computer's audio configuration.
 
+Settings are stored in `settings.json` in the package's local app data folder. The previous complete save is retained as `settings.json.bak`. Existing settings from earlier AudioFlip releases are imported automatically, and the original local-settings value is retained. This avoids the 8 KB limit on a single Windows setting value.
+
 Before distributing a release, also check the app with real devices: unplug/reconnect selected devices, switch playback and recording using a shared hotkey, close to the tray and restore by double-click, dismiss the tray menu by clicking outside it, exit from the tray, and verify startup visibility with both startup settings. These checks require an installed, signed package and interactive Windows session.

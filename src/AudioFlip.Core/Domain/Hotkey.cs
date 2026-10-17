@@ -24,16 +24,18 @@ public sealed record Hotkey
 
     public static bool Validate(KeyModifiers modifiers, Key key)
     {
-        if ((modifiers, key) != default)
-        {
-            if (!modifiers.HasFlag(KeyModifiers.Control)
-                && !modifiers.HasFlag(KeyModifiers.Menu))
-            {
-                return false;
-            }
-        }
+        if ((modifiers, key) == default)
+            return true;
 
-        return true;
+        var keyCode = (int)key;
+
+        // Modifier-only combinations and the debugger's F12 cannot be
+        // registered as global shortcuts.
+        return (modifiers.HasFlag(KeyModifiers.Control) || modifiers.HasFlag(KeyModifiers.Menu))
+            && (modifiers & ~(KeyModifiers.Control | KeyModifiers.Menu | KeyModifiers.Shift | KeyModifiers.Windows)) == 0
+            && keyCode is > 0 and < 0xFF
+            && keyCode is not (0x10 or 0x11 or 0x12 or 0x5B or 0x5C or 0x7B)
+            && keyCode is not (>= 0xA0 and <= 0xA5);
     }
 
     public override string ToString()

@@ -5,6 +5,19 @@ public sealed class HotkeyTests
     private static readonly Hotkey First = new(KeyModifiers.Control, Key.A);
     private static readonly Hotkey Second = new(KeyModifiers.Menu, Key.Z);
 
+    [Theory]
+    [InlineData(KeyModifiers.None, 0, true)]
+    [InlineData(KeyModifiers.Control, 0, false)]
+    [InlineData(KeyModifiers.Control, 0x11, false)]
+    [InlineData(KeyModifiers.Menu, 0xA5, false)]
+    [InlineData(KeyModifiers.Control, 0x7B, false)]
+    [InlineData(KeyModifiers.Shift, 0x41, false)]
+    [InlineData(KeyModifiers.Control, 0x41, true)]
+    public void ModifierOnlyAndReservedShortcutsAreRejected(KeyModifiers modifiers, int key, bool expected)
+    {
+        Assert.Equal(expected, Hotkey.Validate(modifiers, (Key)key));
+    }
+
     [Fact]
     public async Task PlaybackAndRecordingShareOneNativeRegistration()
     {
