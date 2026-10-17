@@ -43,7 +43,7 @@ public sealed class ImportDeviceMapping
         SavedName = DeviceReference.GetSavedName(reference) ?? reference;
         var choices = new List<ImportDeviceChoice>
         {
-            new("Keep saved selection (currently unavailable or ambiguous)", null),
+            new("Keep saved selection", null),
             new("Remove from imported selections", null, Omit: true),
         };
         foreach (var device in devices.DistinctBy(x => x.Id))
@@ -57,10 +57,10 @@ public sealed class ImportDeviceMapping
         var exact = choices.FirstOrDefault(x => x.Device != null && x.Device.Id == savedId);
         var named = choices.Where(x => x.Device?.Name == SavedName).ToArray();
         SelectedOption = exact ?? (named.Length == 1 ? named[0] : choices[0]);
-        MatchDescription = exact != null ? "Matched by device ID."
-            : named.Length == 1 ? "Suggested by name. Confirm this is the correct device."
-            : named.Length > 1 ? "Several devices share this name. Choose the correct device."
-            : "Device is unavailable. Keep it saved, remove it, or choose a replacement.";
+        MatchDescription = exact != null ? "Matched by ID"
+            : named.Length == 1 ? "Matched by name — review device"
+            : named.Length > 1 ? "Duplicate names — choose device"
+            : "Unavailable — keep or replace";
     }
 
     public AudioDeviceClass DeviceClass { get; }

@@ -6,7 +6,7 @@ public sealed record AudioSwitcherState
 {
     public static string ForkedRepository { get; } = "https://github.com/Cyp9715/AudioFlip";
     public static string Title { get; } = "AudioFlip";
-    public static string Version { get; } = "1.1.0";
+    public static string Version { get; } = "1.2.0";
     public List<Command> Commands { get; set; } = new();
     public bool RunAtStartup { get; set; } = true;
     public bool RunAtStartupMinimized { get; set; } = true;
@@ -14,4 +14,12 @@ public sealed record AudioSwitcherState
     public bool ShowDisabledDevices { get; set; } = false;
     public bool SwitchCommunicationDevice { get; set; } = true;
     public bool DarkTheme { get; set; } = true;
+
+    public void EnsureDefaultCommands()
+    {
+        if (!Commands.Any(x => x.DeviceClass == AudioDeviceClass.Render))
+            Commands.Add(new("Default command", AudioDeviceClass.Render));
+        if (!Commands.Any(x => x.DeviceClass == AudioDeviceClass.Capture))
+            Commands.Add(new("Default recording command", AudioDeviceClass.Capture));
+    }
 }

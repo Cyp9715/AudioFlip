@@ -145,19 +145,8 @@
             </ListView.ItemTemplate>
         </ListView>
 
-        <TextBox Grid.Row="3"
-                 Grid.Column="0"
-                 Grid.ColumnSpan="2"
-                 IsReadOnly="True"
-                 Text="{x:Bind ViewModel.Command, Mode=OneWay}" />
-        <Button Grid.Row="3"
-                Grid.Column="2"
-                Background="Transparent"
-                Command="{x:Bind ViewModel.CopyCommandToClipboardAsyncCommand}">
-            <ToolTipService.ToolTip>
-                <TextBlock Text="Copy command to clipboard" />
-            </ToolTipService.ToolTip>
-            <SymbolIcon Symbol="Copy" />
-        </Button>
+        <local:CommandBar Grid.Row="3" Grid.ColumnSpan="3"
+                          CommandText="{x:Bind ViewModel.Command, Mode=OneWay}"
+                          CopyCommand="{x:Bind ViewModel.CopyCommandToClipboardAsyncCommand}" />
     </Grid>
 </Page>

@@ -53,12 +53,14 @@ internal sealed class TestStorage : IStateStorage
     public bool FailSave { get; set; }
     public bool FailImportBackup { get; set; }
     public AudioSwitcherState? ImportBackup { get; private set; }
+    public AudioSwitcherState? LastSaved { get; private set; }
     public AudioSwitcherState Load() { ++Loads; return State; }
     public void Save(AudioSwitcherState state)
     {
         if (FailSave)
             throw new IOException("Test save failed.");
         ++Saves;
+        LastSaved = SettingsBackup.Copy(state);
     }
     public void SaveImportBackup(AudioSwitcherState state)
     {
@@ -105,6 +107,7 @@ internal sealed class TestIO : IO
 internal sealed class TestAudioManager : IAudioManager
 {
     public AudioDevice[] Devices { get; set; } = [];
+    public Dictionary<AudioDeviceClass, AudioDevice[]> DevicesByClass { get; } = new();
     public Dictionary<AudioDeviceRoleType, string> Defaults { get; } = new();
     public Dictionary<string, AudioDeviceState> States { get; } = new();
     public List<(string Id, AudioDeviceRoleType Role)> Changes { get; } = new();
@@ -117,7 +120,7 @@ internal sealed class TestAudioManager : IAudioManager
         ++Enumerations;
         if (BeforeEnumeration != null)
             await BeforeEnumeration();
-        return Devices;
+        return DevicesByClass.GetValueOrDefault(type, Devices);
     }
 
     public string GetDefaultAudioId(AudioDeviceClass type, AudioDeviceRoleType role) => Defaults.GetValueOrDefault(role, "");

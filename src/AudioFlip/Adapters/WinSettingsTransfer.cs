@@ -17,6 +17,8 @@ internal sealed class WinSettingsTransfer : ISettingsTransfer
 
     public WinSettingsTransfer(Frame frame) => this.frame = frame;
 
+    public string? LastPath { get; set; }
+
     public async Task<string?> ExportAsync(string contents, string suggestedFileName)
     {
         var picker = new FileSavePicker
@@ -46,7 +48,7 @@ internal sealed class WinSettingsTransfer : ISettingsTransfer
         return string.IsNullOrEmpty(file.Path) ? file.Name : file.Path;
     }
 
-    public async Task<string?> ReadImportAsync()
+    public async Task<SettingsImportFile?> ReadImportAsync()
     {
         var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
         picker.FileTypeFilter.Add(".json");
@@ -56,15 +58,14 @@ internal sealed class WinSettingsTransfer : ISettingsTransfer
             return null;
         if ((await file.GetBasicPropertiesAsync()).Size > SettingsBackup.MaximumFileSize)
             throw new InvalidDataException("The settings backup exceeds the 16 MB size limit.");
-        return await FileIO.ReadTextAsync(file);
+        return new(string.IsNullOrEmpty(file.Path) ? file.Name : file.Path, await FileIO.ReadTextAsync(file));
     }
 
     public async Task<bool> ConfirmImportAsync(SettingsImportPlan plan)
     {
         var content = new StackPanel { Spacing = 12 };
-        content.Children.Add(Wrapped($"Replace your settings with {plan.Backup.Settings.Commands.Count} commands from AudioFlip {plan.Backup.AppVersion}?"));
-        content.Children.Add(Wrapped("Your current settings will be kept in settings.before-import.json in AudioFlip's local settings folder. Later ordinary saves will not replace that copy. Run at startup keeps this Windows installation's permission."));
-        content.Children.Add(Wrapped("Review the devices below. Names may change after reinstalling Windows or audio drivers. Importing does not switch the current audio device."));
+        content.Children.Add(Wrapped($"Replace settings with {plan.Backup.Settings.Commands.Count} commands?"));
+        content.Children.Add(Wrapped("Current settings will be backed up. Run at startup stays unchanged.", 12));
 
         foreach (var mapping in plan.Devices)
         {
@@ -89,10 +90,9 @@ internal sealed class WinSettingsTransfer : ISettingsTransfer
             content.Children.Add(entry);
         }
 
-        content.Children.Add(Wrapped("Kept unavailable selections become eligible when their ID or unique name matches a device again. Ambiguous names are skipped. You can remove a saved selection above instead.", 12));
         var dialog = new ContentDialog
         {
-            Title = "Import settings — review devices",
+            Title = "Import settings",
             Content = new ScrollViewer
             {
                 Content = content,

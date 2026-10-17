@@ -10,6 +10,8 @@ using Windows.ApplicationModel;
 using Activation = Windows.ApplicationModel.Activation;
 using PInvoke;
 using Microsoft.UI.Xaml.Controls;
+using System.Diagnostics;
+using System.Security.Principal;
 
 public sealed partial class App : Application, IApp
 {
@@ -33,6 +35,7 @@ public sealed partial class App : Application, IApp
     public static ElementTheme Theme => AudioSwitcher.DarkTheme ? ElementTheme.Dark : ElementTheme.Light;
     public IServiceProvider Services { get; }
     public static new App Current => (App)Application.Current;
+    internal static string ImportPipeName { get; } = GetImportPipeName();
 
     public void UpdateTheme()
     {
@@ -45,19 +48,27 @@ public sealed partial class App : Application, IApp
         var cmdArgs = Environment.GetCommandLineArgs();
         if (cmdArgs.Length >= 2)
         {
+            var exitCode = 0;
+            var consoleAttached = Kernel32.GetConsoleWindow() != IntPtr.Zero || Kernel32.AttachConsole(-1);
             try
             {
                 var storage = Services.GetRequiredService<IStateStorage>();
                 var audioManager = Services.GetRequiredService<IAudioManager>();
-                var cli = new CLI(audioManager, storage, new NoNotificationService());
+                var cli = new CLI(audioManager, storage, new NoNotificationService(), ImportFromCliAsync);
                 await cli.RunAsync(cmdArgs.Skip(1).ToArray());
+                if (cli.Output != null)
+                    Console.WriteLine(cli.Output);
             }
             catch (Exception e)
             {
-                User32.MessageBox(IntPtr.Zero, e.Message, AudioSwitcherState.Title, User32.MessageBoxOptions.MB_ICONERROR);
+                exitCode = 1;
+                Console.Error.WriteLine(e.Message);
+                var errorHandle = Kernel32.GetStdHandle(Kernel32.StdHandle.STD_ERROR_HANDLE);
+                if (!consoleAttached && (errorHandle == IntPtr.Zero || errorHandle == new IntPtr(-1)))
+                    User32.MessageBox(IntPtr.Zero, e.Message, AudioSwitcherState.Title, User32.MessageBoxOptions.MB_ICONERROR);
             }
 
-            ExitNow();
+            ExitNow(exitCode);
             return;
         }
 
@@ -95,10 +106,39 @@ public sealed partial class App : Application, IApp
 
         // TODO: Remove workaround once Application.Exit() gets fixed
         // See https://github.com/microsoft/microsoft-ui-xaml/issues/5931
-        static void ExitNow()
+        static void ExitNow(int exitCode = 0)
         {
-            Environment.Exit(0);
+            Environment.Exit(exitCode);
         }
+    }
+
+    private async Task<IReadOnlyList<string>> ImportFromCliAsync(AudioSwitcherState imported)
+    {
+        // The instance marker serializes a standalone import with GUI startup.
+        // If a GUI already owns it, that process performs the transaction so
+        // its cached state and registered hotkeys cannot overwrite the import.
+        using var instance = Kernel32.CreateMutex(IntPtr.Zero, false, Id);
+        var error = Kernel32.GetLastError();
+        if (instance == null || error == Win32ErrorCode.ERROR_ACCESS_DENIED)
+            throw new AudioSwitcherException("Cannot access the AudioFlip instance.");
+        if (error == Win32ErrorCode.ERROR_ALREADY_EXISTS)
+            return await SettingsImportPipe.SendAsync(ImportPipeName, imported);
+
+        var storage = Services.GetRequiredService<IStateStorage>();
+        var previous = SettingsBackup.Copy(storage.Load());
+        previous.EnsureDefaultCommands();
+        var task = await Services.GetRequiredService<IStartupTaskManager>().GetTaskAsync(AudioSwitcher.StartupTaskId);
+        previous.RunAtStartup = await task.IsEnabledAsync();
+        var replacement = SettingsBackup.Copy(imported) with { RunAtStartup = previous.RunAtStartup };
+        storage.SaveImportBackup(previous);
+        storage.Save(replacement);
+        return Array.Empty<string>();
+    }
+
+    private static string GetImportPipeName()
+    {
+        using var identity = WindowsIdentity.GetCurrent();
+        return $"AudioFlip.Settings.{identity.User?.Value}.{Process.GetCurrentProcess().SessionId}";
     }
 
     private static IServiceProvider ConfigureServices()

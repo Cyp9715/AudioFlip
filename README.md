@@ -33,6 +33,15 @@ Unavailable selections are kept unless you explicitly remove them in the preview
 
 The settings from immediately before the last import are saved as `settings.before-import.json` in the package's `LocalState` folder, in the same portable format. Ordinary saves do not rotate this file; another import replaces it. Select it with **Import…** to undo an import. This local restore point is separate from an exported backup and does not survive wiping Windows.
 
+The same operations are available from the command line:
+
+```text
+AudioFlip "C:\Backups\AudioFlip.json" -export
+AudioFlip "C:\Backups\AudioFlip.json" -import
+```
+
+Settings shows both commands with the same copy controls as Playback and Recording. Selecting a file updates the paths. CLI import applies matching devices without a dialog and reports unavailable or ambiguous selections. If AudioFlip is running, its commands, hotkeys, and open page update immediately. Failed commands return a nonzero exit code.
+
 ## Platform and development
 
 AudioFlip uses **WinUI 3**, Windows App SDK 1.7, and .NET 10. The supported OS baseline remains **Windows 11 24H2 (build 26100)**. The app and its MSIX packaging project are separate projects in `AudioFlip.slnx`.

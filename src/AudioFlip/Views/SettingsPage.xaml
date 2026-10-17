@@ -7,21 +7,45 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto" IsEnabled="{x:Bind ViewModel.CanTransfer, Mode=OneWay}">
-    <StackPanel Orientation="Vertical" Padding="16" Spacing="4">
+    <Grid Padding="15,10" RowSpacing="7">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" IsEnabled="{x:Bind ViewModel.CanTransfer, Mode=OneWay}">
+        <StackPanel Orientation="Vertical" Spacing="4">
         <local:SettingsPageEntry Title="Dark theme" Reason="" IsChecked="{x:Bind ViewModel.DarkTheme, Mode=TwoWay}" Command="{x:Bind ViewModel.SetDarkThemeCommand}" />
         <local:SettingsPageEntry Title="Run in background" Reason="Required to support global hotkeys" IsChecked="{x:Bind ViewModel.RunInBackground, Mode=TwoWay}" Command="{x:Bind ViewModel.SetRunInBackgroundCommand}" />
         <local:SettingsPageEntry Title="Run at startup" Reason="Required to support global hotkeys" IsChecked="{x:Bind ViewModel.RunAtStartup, Mode=TwoWay}" Command="{x:Bind ViewModel.SetRunAtStartupAsyncCommand}" />
         <local:SettingsPageEntry Title="Run at startup minimized" IsChecked="{x:Bind ViewModel.RunAtStartupMinimized, Mode=TwoWay}" Command="{x:Bind ViewModel.SetRunAtStartupMinimizedCommand}" />
         <local:SettingsPageEntry Title="Switch communication device" Reason="" IsChecked="{x:Bind ViewModel.SwitchCommunicationDevice, Mode=TwoWay}" Command="{x:Bind ViewModel.SetSwitchCommunicationDeviceCommand}" />
         <local:SettingsPageEntry Title="Show disabled devices" Reason="" IsChecked="{x:Bind ViewModel.ShowDisabledDevices, Mode=TwoWay}" Command="{x:Bind ViewModel.SetShowDisabledDevicesCommand}" />
-        <TextBlock Text="Settings backup" FontSize="18" Margin="0,20,0,4" />
-        <TextBlock Text="Save your commands, hotkeys, and preferences to a file. Import it after reinstalling Windows or on another PC, then review the device connections." TextWrapping="Wrap" />
-        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,4">
-            <Button Content="Export…" Command="{x:Bind ViewModel.ExportAsyncCommand}" />
-            <Button Content="Import…" Command="{x:Bind ViewModel.ImportAsyncCommand}" />
+        <Grid ColumnSpacing="7" Margin="0,16,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0" HorizontalAlignment="Stretch" Background="Transparent" Command="{x:Bind ViewModel.ExportAsyncCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <SymbolIcon Symbol="Save" />
+                    <TextBlock Text="Export…" />
+                </StackPanel>
+            </Button>
+            <Button Grid.Column="1" HorizontalAlignment="Stretch" Background="Transparent" Command="{x:Bind ViewModel.ImportAsyncCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <SymbolIcon Symbol="OpenFile" />
+                    <TextBlock Text="Import…" />
+                </StackPanel>
+            </Button>
+        </Grid>
         </StackPanel>
-        <TextBlock Text="Keep exported backups on another drive or in a backed-up cloud folder before reinstalling Windows." TextWrapping="Wrap" FontSize="12" />
-    </StackPanel>
-    </ScrollViewer>
+        </ScrollViewer>
+        <local:CommandBar Grid.Row="1" Label="Export"
+                          CommandText="{x:Bind ViewModel.ExportCommandText, Mode=OneWay}"
+                          CopyCommand="{x:Bind ViewModel.CopyExportCommandToClipboardCommand}" />
+        <local:CommandBar Grid.Row="2" Label="Import"
+                          CommandText="{x:Bind ViewModel.ImportCommandText, Mode=OneWay}"
+                          CopyCommand="{x:Bind ViewModel.CopyImportCommandToClipboardCommand}" />
+    </Grid>
 </Page>

@@ -14,13 +14,21 @@ public sealed class CLI
     private readonly IAudioManager audioManager;
     private readonly IStateStorage stateStorage;
     private readonly INotificationService notificationService;
+    private readonly Func<AudioSwitcherState, Task<IReadOnlyList<string>>>? importSettings;
 
-    public CLI(IAudioManager audioManager, IStateStorage stateStorage, INotificationService notificationService)
+    public CLI(
+        IAudioManager audioManager,
+        IStateStorage stateStorage,
+        INotificationService notificationService,
+        Func<AudioSwitcherState, Task<IReadOnlyList<string>>>? importSettings = null)
     {
         this.stateStorage = stateStorage;
         this.audioManager = audioManager;
         this.notificationService = notificationService;
+        this.importSettings = importSettings;
     }
+
+    public string? Output { get; private set; }
 
     public async Task RunAsync(string cmd)
     {
@@ -29,6 +37,13 @@ public sealed class CLI
 
     public async Task RunAsync(string[] cmdArgs)
     {
+        Output = null;
+        if (TryParseSettingsArguments(cmdArgs, out var import, out var path))
+        {
+            await TransferSettingsAsync(import, path);
+            return;
+        }
+
         ParseArguments(cmdArgs, out var device, out var type);
 
         if (!device.Any())
@@ -40,6 +55,9 @@ public sealed class CLI
         var toggler = new AudioSwitcherToggler(audioManager, notificationService);
         await toggler.ToggleAsync(type, uniqueDeviceIds, state.SwitchCommunicationDevice);
     }
+
+    public static string BuildSettingsCommand(string path, bool import) =>
+        $"AudioFlip {QuoteArgument(path)} -{(import ? "import" : "export")}";
 
     public static string GetDeviceId(string devicePart, AudioDevice[] deviceList)
     {
@@ -177,6 +195,63 @@ public sealed class CLI
         }
 
         return args.ToArray();
+    }
+
+    private static bool TryParseSettingsArguments(string[] args, out bool import, out string path)
+    {
+        var flags = args.Where(x => x is "-import" or "-export").ToArray();
+        import = flags.FirstOrDefault() == "-import";
+        path = string.Empty;
+        if (flags.Length == 0)
+            return false;
+        if (flags.Length != 1 || args.Length != 2)
+            throw new CLIException("Usage: AudioFlip \"<settings.json>\" -import|-export");
+        path = args.Single(x => x != flags[0]);
+        if (string.IsNullOrWhiteSpace(path) || path.StartsWith('-'))
+            throw new CLIException("Specify a settings file path.");
+        return true;
+    }
+
+    private async Task TransferSettingsAsync(bool import, string path)
+    {
+        path = Path.GetFullPath(path);
+        if (!import)
+        {
+            var state = SettingsBackup.Copy(stateStorage.Load());
+            state.EnsureDefaultCommands();
+            AtomicFile.WriteAllText(path, new SettingsBackup { Settings = state }.ToJson());
+            Output = $"Exported settings: {path}";
+            return;
+        }
+
+        if (new FileInfo(path).Length > SettingsBackup.MaximumFileSize)
+            throw new InvalidDataException("The settings backup exceeds the 16 MB size limit.");
+        var backup = SettingsBackup.Parse(await File.ReadAllTextAsync(path));
+        var playback = await audioManager.GetAllDevicesAsync(AudioDeviceClass.Render);
+        var recording = await audioManager.GetAllDevicesAsync(AudioDeviceClass.Capture);
+        var plan = new SettingsImportPlan(backup, playback, recording);
+        var imported = plan.BuildState();
+        IReadOnlyList<string> warnings;
+        if (importSettings != null)
+        {
+            warnings = await importSettings(imported);
+        }
+        else
+        {
+            var previous = SettingsBackup.Copy(stateStorage.Load());
+            previous.EnsureDefaultCommands();
+            imported.RunAtStartup = previous.RunAtStartup;
+            stateStorage.SaveImportBackup(previous);
+            stateStorage.Save(imported);
+            warnings = Array.Empty<string>();
+        }
+
+        var lines = new List<string> { $"Imported {imported.Commands.Count} commands: {path}" };
+        var unresolved = plan.Devices.Count(x => x.SelectedOption.Device == null);
+        if (unresolved > 0)
+            lines.Add($"Kept {unresolved} unavailable or ambiguous device selections. Review them in Settings > Import.");
+        lines.AddRange(warnings);
+        Output = string.Join(Environment.NewLine, lines);
     }
 
     private static string QuoteArgument(string value)

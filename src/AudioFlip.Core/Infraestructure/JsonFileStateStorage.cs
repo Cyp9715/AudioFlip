@@ -60,50 +60,21 @@ public sealed class JsonFileStateStorage : IStateStorage
             }
         }
 
-        WriteAtomic(path, JsonSerializer.Serialize(state), preservePrevious ? path + ".bak" : null);
+        AtomicFile.WriteAllText(path, JsonSerializer.Serialize(state), preservePrevious ? path + ".bak" : null);
     }
 
     public void SaveImportBackup(AudioSwitcherState state)
     {
         var backup = new SettingsBackup { Settings = SettingsBackup.Copy(state) };
         var backupPath = Path.Combine(Path.GetDirectoryName(path)!, "settings.before-import.json");
-        WriteAtomic(backupPath, backup.ToJson());
+        AtomicFile.WriteAllText(backupPath, backup.ToJson());
     }
 
     private AudioSwitcherState RecoverBackup()
     {
         var recovered = Read(path + ".bak");
-        WriteAtomic(path, JsonSerializer.Serialize(recovered));
+        AtomicFile.WriteAllText(path, JsonSerializer.Serialize(recovered));
         return recovered;
-    }
-
-    private static void WriteAtomic(string destination, string json, string? backupPath = null)
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-        var temporaryPath = destination + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        try
-        {
-            using (var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-            {
-                using (var writer = new StreamWriter(stream, leaveOpen: true))
-                {
-                    writer.Write(json);
-                    writer.Flush();
-                }
-
-                stream.Flush(flushToDisk: true);
-            }
-
-            if (File.Exists(destination))
-                File.Replace(temporaryPath, destination, backupPath);
-            else
-                File.Move(temporaryPath, destination);
-        }
-        finally
-        {
-            if (File.Exists(temporaryPath))
-                File.Delete(temporaryPath);
-        }
     }
 
     private static AudioSwitcherState Read(string path)
