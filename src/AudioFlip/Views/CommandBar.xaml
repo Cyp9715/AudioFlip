@@ -8,10 +8,12 @@
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
-        <TextBlock Grid.Column="0"
-                   VerticalAlignment="Center"
-                   Text="{x:Bind Label, Mode=OneWay}"
-                   Visibility="{x:Bind GetLabelVisibility(Label), Mode=OneWay}" />
+        <Button Grid.Column="0"
+                MinWidth="80"
+                Background="Transparent"
+                Content="{x:Bind Label, Mode=OneWay}"
+                Command="{x:Bind LabelCommand, Mode=OneWay}"
+                Visibility="{x:Bind GetLabelVisibility(Label), Mode=OneWay}" />
         <TextBox Grid.Column="1"
                  IsReadOnly="True"
                  Text="{x:Bind CommandText, Mode=OneWay}"

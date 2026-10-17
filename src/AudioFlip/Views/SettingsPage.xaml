@@ -23,32 +23,14 @@
             </StackPanel>
         </ScrollViewer>
         <StackPanel Grid.Row="1" Spacing="7">
-            <Grid ColumnSpacing="7" HorizontalAlignment="Left">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <Button Grid.Column="0" MinWidth="112" Background="Transparent"
-                        IsEnabled="{x:Bind ViewModel.CanTransfer, Mode=OneWay}"
-                        Command="{x:Bind ViewModel.ExportAsyncCommand}">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <SymbolIcon Symbol="Save" />
-                        <TextBlock Text="Export…" />
-                    </StackPanel>
-                </Button>
-                <Button Grid.Column="1" MinWidth="112" Background="Transparent"
-                        IsEnabled="{x:Bind ViewModel.CanTransfer, Mode=OneWay}"
-                        Command="{x:Bind ViewModel.ImportAsyncCommand}">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <SymbolIcon Symbol="OpenFile" />
-                        <TextBlock Text="Import…" />
-                    </StackPanel>
-                </Button>
-            </Grid>
             <local:CommandBar Label="Export"
+                              IsEnabled="{x:Bind ViewModel.CanTransfer, Mode=OneWay}"
+                              LabelCommand="{x:Bind ViewModel.ExportAsyncCommand}"
                               CommandText="{x:Bind ViewModel.ExportCommandText, Mode=OneWay}"
                               CopyCommand="{x:Bind ViewModel.CopyExportCommandToClipboardCommand}" />
             <local:CommandBar Label="Import"
+                              IsEnabled="{x:Bind ViewModel.CanTransfer, Mode=OneWay}"
+                              LabelCommand="{x:Bind ViewModel.ImportAsyncCommand}"
                               CommandText="{x:Bind ViewModel.ImportCommandText, Mode=OneWay}"
                               CopyCommand="{x:Bind ViewModel.CopyImportCommandToClipboardCommand}" />
         </StackPanel>

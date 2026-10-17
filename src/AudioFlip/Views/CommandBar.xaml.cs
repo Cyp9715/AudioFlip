@@ -9,6 +9,7 @@ public sealed partial class CommandBar : UserControl
     public static readonly DependencyProperty CommandTextProperty = DependencyProperty.Register(nameof(CommandText), typeof(string), typeof(CommandBar), new PropertyMetadata(string.Empty));
     public static readonly DependencyProperty CopyCommandProperty = DependencyProperty.Register(nameof(CopyCommand), typeof(ICommand), typeof(CommandBar), null);
     public static readonly DependencyProperty LabelProperty = DependencyProperty.Register(nameof(Label), typeof(string), typeof(CommandBar), new PropertyMetadata(string.Empty));
+    public static readonly DependencyProperty LabelCommandProperty = DependencyProperty.Register(nameof(LabelCommand), typeof(ICommand), typeof(CommandBar), null);
 
     public CommandBar() => InitializeComponent();
 
@@ -28,6 +29,12 @@ public sealed partial class CommandBar : UserControl
     {
         get => (string)GetValue(LabelProperty);
         set => SetValue(LabelProperty, value);
+    }
+
+    public ICommand LabelCommand
+    {
+        get => (ICommand)GetValue(LabelCommandProperty);
+        set => SetValue(LabelCommandProperty, value);
     }
 
     public Visibility GetLabelVisibility(string label) => string.IsNullOrEmpty(label) ? Visibility.Collapsed : Visibility.Visible;
