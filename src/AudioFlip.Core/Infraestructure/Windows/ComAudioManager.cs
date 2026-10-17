@@ -16,6 +16,7 @@ public class ComAudioManager : IAudioManager
             var result = new List<AudioDevice>();
             using var deviceEnumerator = new ComObject<IMMDeviceEnumerator, MMDeviceEnumerator>();
             ComUtil.CheckResult(deviceEnumerator.Value.EnumAudioEndpoints(type.ToComDataFlow(), flags, out var deviceList));
+            using var deviceListOwner = new ComObject<IMMDeviceCollection>(deviceList);
             ComUtil.CheckResult(deviceList.GetCount(out var deviceCount));
 
             for (uint i = 0; i < deviceCount; ++i)
@@ -23,11 +24,21 @@ public class ComAudioManager : IAudioManager
                 try
                 {
                     ComUtil.CheckResult(deviceList.Item(i, out var device));
+                    using var deviceOwner = new ComObject<IMMDevice>(device);
                     ComUtil.CheckResult(device.GetId(out var id));
                     ComUtil.CheckResult(device.OpenPropertyStore(StorageConstants.STGM_READ, out var props));
+                    using var propsOwner = new ComObject<IPropertyStore>(props);
                     ComUtil.CheckResult(props.GetValue(ref nameKey, out var variant));
-                    var name = variant.GetValueOrDefault(string.Empty);
-                    PropVariant.Clear(ref variant);
+                    string name;
+                    try
+                    {
+                        name = variant.GetValueOrDefault(string.Empty);
+                    }
+                    finally
+                    {
+                        PropVariant.Clear(ref variant);
+                    }
+
                     ComUtil.CheckResult(device.GetState(out var state));
                     result.Add(new AudioDevice(id, name));
                 }
@@ -51,6 +62,7 @@ public class ComAudioManager : IAudioManager
         {
             using var deviceEnumerator = new ComObject<IMMDeviceEnumerator, MMDeviceEnumerator>();
             ComUtil.CheckResult(deviceEnumerator.Value.GetDefaultAudioEndpoint(type.ToComDataFlow(), role.ToComRole(), out var device));
+            using var deviceOwner = new ComObject<IMMDevice>(device);
             ComUtil.CheckResult(device.GetId(out var id));
             return id;
         }
@@ -65,7 +77,15 @@ public class ComAudioManager : IAudioManager
         try
         {
             using var policyConfig = new ComObject<IPolicyConfig, PolicyConfig>();
-            return policyConfig.Value.SetDefaultEndpoint(GetAudioId(id), role.ToComRole()) == 0;
+            var endpointId = GetAudioId(id);
+            var result = policyConfig.Value.SetDefaultEndpoint(endpointId, role.ToComRole());
+            if (result < 0)
+                return false;
+
+            // Windows has separate console and multimedia defaults. Media
+            // players must follow the same choice as the system default.
+            return role != AudioDeviceRoleType.Default
+                || policyConfig.Value.SetDefaultEndpoint(endpointId, ERole.eMultimedia) >= 0;
         }
         catch
         {
@@ -76,7 +96,7 @@ public class ComAudioManager : IAudioManager
     public void SetVisibility(string id, bool visible)
     {
         using var policyConfig = new ComObject<IPolicyConfig, PolicyConfig>();
-        ComUtil.CheckResult(policyConfig.Value.SetEndpointVisibility(GetAudioId(id + 1), visible ? 1 : 0));
+        ComUtil.CheckResult(policyConfig.Value.SetEndpointVisibility(GetAudioId(id), visible ? 1 : 0));
     }
 
     public bool IsDefault(string id, AudioDeviceClass type, AudioDeviceRoleType role)
@@ -100,5 +120,5 @@ public class ComAudioManager : IAudioManager
         }
     }
 
-    private static string GetAudioId(string id) => Regex.Match(id, @"{.*}\.{[a-zA-Z0-9-]*}").Value;
+    private static string GetAudioId(string id) => Regex.Match(id, @"\{[^{}]+\}\.\{[a-zA-Z0-9-]+\}").Value;
 }

@@ -2,7 +2,6 @@
 
 namespace AudioFlip.Interop;
 
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 public class ComObject<TInterface> : IDisposable
@@ -36,7 +35,7 @@ public sealed class ComObject<TInterface, TImp> : ComObject<TInterface>, IDispos
     where TImp : new()
 {
     public ComObject()
-        : base(Unsafe.As<TInterface>(new TImp()))
+        : base((TInterface)(object)new TImp())
     {
     }
 }

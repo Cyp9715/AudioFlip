@@ -20,3 +20,25 @@ AudioFlip is a Windows utility for quickly switching the system default audio de
 - Command integration: generate commands that can be used in external macro/key-mapping tools.
 
 This is especially useful when moving between gaming, calls, streaming, and work setups where audio output/input devices need to change frequently, and it is particularly helpful for dynamically switching microphone and headset setups in Discord.
+
+## Platform and development
+
+AudioFlip uses **WinUI 3**, Windows App SDK 1.7, and .NET 10. The supported OS baseline remains **Windows 11 24H2 (build 26100)**. The app and its MSIX packaging project are separate projects in `AudioFlip.slnx`.
+
+Install Visual Studio 2026 with the WinUI/Windows application development and MSIX packaging tools, the Windows 11 SDK (26100), and the .NET 10 SDK. Use Visual Studio's MSBuild for the app and packaging projects; `dotnet build` alone does not provide the required Visual Studio packaging tasks.
+
+From PowerShell in the repository root:
+
+```powershell
+./build.ps1 test
+./build.ps1 build -platform x64
+./build.ps1 build -platform arm64
+```
+
+Builds produce **unsigned** bundles in `AppPackages/`. Sign a bundle with your own trusted certificate before installing it, or submit the unsigned bundle through the Store publishing process. CI runs the regression tests and builds both architectures without installing audio drivers, accessing signing secrets, or publishing to the Store.
+
+The tests cover endpoint ID changes, disconnected device selections, independent playback/recording command names, shared hotkeys, command-line quoting, switching order, notifications, and native COM signatures. They use simulated audio devices and do not change the computer's audio configuration.
+
+Settings are stored in `settings.json` in the package's local app data folder. The previous complete save is retained as `settings.json.bak`. Existing settings from earlier AudioFlip releases are imported automatically, and the original local-settings value is retained. This avoids the 8 KB limit on a single Windows setting value.
+
+Before distributing a release, also check the app with real devices: unplug/reconnect selected devices, switch playback and recording using a shared hotkey, close to the tray and restore by double-click, dismiss the tray menu by clicking outside it, exit from the tray, and verify startup visibility with both startup settings. These checks require an installed, signed package and interactive Windows session.

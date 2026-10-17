@@ -29,22 +29,35 @@ public enum MMDeviceState
     All = 0x0000000f,
 }
 
+[ComImport]
 [Guid("F8679F50-850A-41CF-9C72-430F290290C8")]
 [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 public interface IPolicyConfig
 {
+    [PreserveSig]
     HRESULT _GetMixFormat();
+    [PreserveSig]
     HRESULT _GetDeviceFormat();
+    [PreserveSig]
     HRESULT _ResetDeviceFormat();
+    [PreserveSig]
     HRESULT _SetDeviceFormat();
+    [PreserveSig]
     HRESULT _GetProcessingPeriod();
+    [PreserveSig]
     HRESULT _SetProcessingPeriod();
+    [PreserveSig]
     HRESULT _GetShareMode();
+    [PreserveSig]
     HRESULT _SetShareMode();
+    [PreserveSig]
     HRESULT _GetPropertyValue();
+    [PreserveSig]
     HRESULT _SetPropertyValue();
-    HRESULT SetDefaultEndpoint(string deviceId, ERole role);
-    HRESULT SetEndpointVisibility(string deviceId, int value);
+    [PreserveSig]
+    HRESULT SetDefaultEndpoint([MarshalAs(UnmanagedType.LPWStr)] string deviceId, ERole role);
+    [PreserveSig]
+    HRESULT SetEndpointVisibility([MarshalAs(UnmanagedType.LPWStr)] string deviceId, int value);
 }
 
 [ComImport]
@@ -53,31 +66,43 @@ public sealed class PolicyConfig
 {
 }
 
+[ComImport]
 [Guid("D666063F-1587-4E43-81F1-B948E807363F")]
 [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 public unsafe interface IMMDevice
 {
+    [PreserveSig]
     public HRESULT Activate(ref Guid id, uint dwClsCtx, IntPtr pActivationParams, [MarshalAs(UnmanagedType.IUnknown)] out object ppInterface);
+    [PreserveSig]
     public HRESULT OpenPropertyStore(uint stgmAccess, out IPropertyStore ppProperties);
+    [PreserveSig]
     public HRESULT GetId([MarshalAs(UnmanagedType.LPWStr)] out string id);
+    [PreserveSig]
     public HRESULT GetState(out MMDeviceState pdwState);
 };
 
+[ComImport]
 [Guid("0BD7A1BE-7A1A-44DB-8397-CC5392387B5E")]
 [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 public unsafe interface IMMDeviceCollection
 {
+    [PreserveSig]
     public HRESULT GetCount(out uint pcDevices);
+    [PreserveSig]
     public HRESULT Item(uint nDevice, out IMMDevice ppDevice);
 };
 
+[ComImport]
 [Guid("A95664D2-9614-4F35-A746-DE8DB63617E6")]
 [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 public unsafe interface IMMDeviceEnumerator
 {
+    [PreserveSig]
     public HRESULT EnumAudioEndpoints(EDataFlow dataFlow, uint dwStateMask, out IMMDeviceCollection ppDevices);
+    [PreserveSig]
     public HRESULT GetDefaultAudioEndpoint(EDataFlow dataFlow, ERole role, out IMMDevice ppEndpoint);
-    public HRESULT GetDevice(string id, out IMMDevice device);
+    [PreserveSig]
+    public HRESULT GetDevice([MarshalAs(UnmanagedType.LPWStr)] string id, out IMMDevice device);
 }
 
 [ComImport]
@@ -86,14 +111,20 @@ public sealed class MMDeviceEnumerator
 {
 }
 
+[ComImport]
 [Guid("886d8eeb-8cf2-4446-8d02-cdba1dbdcf99")]
 [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 public interface IPropertyStore
 {
+    [PreserveSig]
     int GetCount(out int cProps);
+    [PreserveSig]
     int GetAt(int property, out PropertyKey pkey);
+    [PreserveSig]
     int GetValue(ref PropertyKey key, out PropVariant pv);
+    [PreserveSig]
     int SetValue(ref PropertyKey key, ref PropVariant propvar);
+    [PreserveSig]
     int Commit();
 }
 
@@ -113,6 +144,16 @@ public struct PropVariant
 {
     [FieldOffset(0)] public short type;
     [FieldOffset(8)] public IntPtr pointerValue;
+    // The native union also contains counted arrays. Its size is 16 bytes on
+    // x86 and 24 on x64/ARM64, even when the value currently holds a string.
+    [FieldOffset(8)] private CountedArray countedArray;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct CountedArray
+    {
+        public uint Count;
+        public IntPtr Pointer;
+    }
 
 #pragma warning disable CS0618 // Type or member is obsolete
     public T GetValueOrDefault<T>(T def = default)

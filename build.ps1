@@ -1,93 +1,57 @@
-param([Parameter(Position=0)]$cmd, $configuration=$env:CONFIGURATION, $platform=$env:PLATFORM, $ci=$False)
+param(
+    [Parameter(Position = 0)]
+    [ValidateSet('build', 'restore', 'test')]
+    [string]$cmd = 'build',
+    [ValidateSet('Debug', 'Release')]
+    [string]$configuration = 'Release',
+    [ValidateSet('x64', 'arm64', 'x86')]
+    [string]$platform = 'x64'
+)
 
-if (!$configuration) {
-	$configuration = "Release"
+$ErrorActionPreference = 'Stop'
+
+function Invoke-Checked {
+    param([string]$File, [string[]]$Arguments)
+    & $File @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "$File failed with exit code $LASTEXITCODE."
+    }
 }
 
-if (!$platform) {
-	$platform = "x64"
+if ($cmd -eq 'test') {
+    Invoke-Checked -File 'dotnet' -Arguments @(
+        'test', "$PSScriptRoot/test/AudioFlip.Tests.csproj",
+        '-c', $configuration, "-p:Platform=$platform", '--logger', 'trx'
+    )
+    return
 }
 
-$root = $PSScriptRoot
-$projectName = 'AudioFlip'
-$solutionPath = "$root/$projectName.slnx"
-$package_dir = "$root/src/$projectName (Package)"
-$certificatePath = "$root/$projectName.pfx"
-$sign = (Test-Path $certificatePath)
-
-function Create-Package {
-	msbuild $solutionPath -v:m -nologo `
-	-p:Configuration=$configuration `
-	-p:Platform=$platform `
-	-p:AppxPackageSigningEnabled=$sign `
-	-p:AppxBundlePlatforms=$platform `
-	-p:AppPublishSingleFile=true `
-	-p:UapAppxPackageBuildMode=StoreUpload
+$msbuildCommand = Get-Command MSBuild.exe -ErrorAction SilentlyContinue
+if ($msbuildCommand) {
+    $msbuild = $msbuildCommand.Source
+} else {
+    $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
+    if (!(Test-Path -LiteralPath $vswhere)) {
+        throw 'Install Visual Studio 2026 with the WinUI and Windows application packaging tools.'
+    }
+    $msbuild = & $vswhere -latest -products '*' -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
+    if (!$msbuild) {
+        throw 'MSBuild was not found. Install the Visual Studio Windows application development tools.'
+    }
 }
 
-function Install-Audio-Devices {
-	$url = "https://download.vb-audio.com/Download_CABLE/VBCABLE_Driver_Pack43.zip"
-	$installDir = "$root/VB-Cable"
-	$zip = "$root/VB-Cable.zip"
-	$instances = 2
-
-	Set-Service -Name "Audiosrv" -StartupType Automatic
-    Start-Service Audiosrv
-
-	New-Item -ItemType Directory -Force -Path $installDir
-	Invoke-WebRequest $url -OutFile $zip
-	Expand-Archive -LiteralPath $zip -DestinationPath $installDir
-
-	$cert = (Get-AuthenticodeSignature "$installDir/vbaudio_cable64_win7.sys").SignerCertificate
-	$store = [System.Security.Cryptography.X509Certificates.X509Store]::new("TrustedPublisher", "LocalMachine")
-	$store.Open("ReadWrite")
-	$store.Add($cert)
-	$store.Close()
-
-	for ($i = 0; $i -lt $instances; $i++)
-	{
-		&"$root/util/devcon" install "$installDir/vbMmeCable64_win7.inf" VBAudioVACWDM
-	}
-
-	exit 0
+$arguments = @(
+    "$PSScriptRoot/AudioFlip.slnx", '-nologo', '-v:minimal',
+    "-p:Configuration=$configuration", "-p:Platform=$platform"
+)
+if ($cmd -eq 'restore') {
+    $arguments += '-t:Restore'
+} else {
+    $arguments += @(
+        '-restore', '-p:AppxPackageSigningEnabled=false',
+        "-p:AppxBundlePlatforms=$platform", '-p:AppxBundle=Always',
+        '-p:UapAppxPackageBuildMode=SideloadOnly'
+    )
 }
 
-function Set-Package-Version {
-	[xml]$manifest = Get-Content "$package_dir/Package.appxmanifest"
-	$manifest.Package.Identity.Version = "$env:NBGV_SimpleVersion.0"
-	$manifest.save("$package_dir/Package.appxmanifest")
-}
-
-function Restore {
-	msbuild $solutionPath -v:m -nologo -p:Configuration=$configuration -p:Platform=$platform -t:restore
-}
-
-function Test {
-	dotnet test test/AudioFlip.Tests.csproj  -v:m -nologo -p:Configuration=$configuration -p:Platform=$platform
-}
-
-function Coverage {
-	$dir = "$root/TestResults"
-	Remove-Item $dir -Force -Recurse -ErrorAction SilentlyContinue
-	dotnet test test/AudioFlip.Tests.csproj  -v:m -nologo -p:Configuration=$configuration -p:Platform=$platform --collect "XPlat Code Coverage" -r $dir --settings coverage.runsettings
-	$result = (Get-Item TestResults/**/*.xml).FullName
-	reportgenerator -reports:$result -targetdir:$dir -reporttypes html
-	Start-Process "$dir/index.html"
-}
-
-function Create-Certificate {
-	Set-Content -Path "${projectName}.txt" -Value "$env:CERTIFICATE"
-	certutil -decode "${projectName}.txt" "${projectName}.pfx"
-	Remove-Item "${projectName}.txt"
-}
-
-switch ($cmd)
-{
-	"restore" { Restore }
-	"test" { Test }
-	"coverage" { Coverage }
-	"install-audio-devices" { Install-Audio-Devices }
-	"set-package-version" { Set-Package-Version }
-	"create-certificate" { Create-Certificate }
-	default { Create-Package }
-}
+Invoke-Checked -File $msbuild -Arguments $arguments

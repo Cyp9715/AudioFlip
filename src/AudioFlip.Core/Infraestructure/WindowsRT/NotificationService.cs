@@ -24,7 +24,7 @@ public sealed class NotificationService : INotificationService
         ToastNotificationManager.History.Clear();
 
         new ToastContentBuilder()
-           .AddText($"? {message}")
+           .AddText($"⚠️ {message}")
            .Show();
 
         return Task.CompletedTask;

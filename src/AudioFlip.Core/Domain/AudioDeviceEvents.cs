@@ -5,4 +5,4 @@ namespace AudioFlip;
 public sealed record AudioDeviceAdded(string Id, AudioDevice Device);
 public sealed record AudioDeviceRemoved(string Id);
 public sealed record AudioDeviceUpdated(string Id, AudioDeviceChanges Changes);
-public sealed record DefaultAudioDeviceChanged(AudioDeviceRoleType Role, string Id);
+public sealed record DefaultAudioDeviceChanged(AudioDeviceRoleType Role, string Id, AudioDeviceClass DeviceClass);

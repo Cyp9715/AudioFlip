@@ -10,11 +10,12 @@ using Windows.Media.Devices;
 
 public sealed class AudioDeviceWatcher : IDisposable
 {
-    private readonly SemaphoreSlim enumerationCompletedSignal = new(0, 1);
     private readonly AudioEvents events;
+    private TaskCompletionSource? enumerationCompleted;
     private AudioDeviceClass deviceClass;
     private DeviceWatcher? deviceWatcher = null;
     private bool started = false;
+    private bool disposed;
 
     public AudioDeviceWatcher(AudioEvents events)
     {
@@ -25,28 +26,38 @@ public sealed class AudioDeviceWatcher : IDisposable
 
     public async Task StartAsync(AudioDeviceClass deviceClass)
     {
+        ObjectDisposedException.ThrowIf(disposed, this);
         if (started)
+        {
+            await enumerationCompleted!.Task;
             return;
+        }
 
         this.deviceClass = deviceClass;
         started = true;
+        enumerationCompleted = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         if (deviceClass == AudioDeviceClass.Render)
             MediaDevice.DefaultAudioRenderDeviceChanged += MediaDevice_DefaultAudioRenderDeviceChanged;
         else if (deviceClass == AudioDeviceClass.Capture)
             MediaDevice.DefaultAudioCaptureDeviceChanged += MediaDevice_DefaultAudioCaptureDeviceChanged;
 
-        if (deviceWatcher == null)
+        try
         {
             deviceWatcher = DeviceInformation.CreateWatcher(AudioManager.GetInterfaceGuid(deviceClass));
             deviceWatcher.EnumerationCompleted += Watcher_EnumerationCompleted;
+            deviceWatcher.Stopped += Watcher_Stopped;
             deviceWatcher.Added += Watcher_Added;
             deviceWatcher.Removed += Watcher_Removed;
             deviceWatcher.Updated += Watcher_Updated;
+            deviceWatcher.Start();
+            await enumerationCompleted.Task;
         }
-
-        deviceWatcher.Start();
-        await enumerationCompletedSignal.WaitAsync();
+        catch
+        {
+            Stop();
+            throw;
+        }
     }
 
     public void Stop()
@@ -55,7 +66,18 @@ public sealed class AudioDeviceWatcher : IDisposable
             return;
 
         started = false;
-        deviceWatcher?.Stop();
+        enumerationCompleted?.TrySetCanceled();
+        if (deviceWatcher is { } watcher)
+        {
+            deviceWatcher = null;
+            watcher.EnumerationCompleted -= Watcher_EnumerationCompleted;
+            watcher.Stopped -= Watcher_Stopped;
+            watcher.Added -= Watcher_Added;
+            watcher.Removed -= Watcher_Removed;
+            watcher.Updated -= Watcher_Updated;
+            if (watcher.Status is DeviceWatcherStatus.Started or DeviceWatcherStatus.EnumerationCompleted)
+                watcher.Stop();
+        }
 
         if (deviceClass == AudioDeviceClass.Render)
             MediaDevice.DefaultAudioRenderDeviceChanged -= MediaDevice_DefaultAudioRenderDeviceChanged;
@@ -65,27 +87,32 @@ public sealed class AudioDeviceWatcher : IDisposable
 
     public void Dispose()
     {
+        disposed = true;
         Stop();
-        deviceWatcher = null;
     }
 
     private void MediaDevice_DefaultAudioRenderDeviceChanged(object sender, DefaultAudioRenderDeviceChangedEventArgs args)
     {
-        events.Raise(new DefaultAudioDeviceChanged(args.Role.ToRole(), args.Id));
+        if (started)
+            events.Raise(new DefaultAudioDeviceChanged(args.Role.ToRole(), args.Id, AudioDeviceClass.Render));
     }
 
     private void MediaDevice_DefaultAudioCaptureDeviceChanged(object sender, DefaultAudioCaptureDeviceChangedEventArgs args)
     {
-        events.Raise(new DefaultAudioDeviceChanged(args.Role.ToRole(), args.Id));
+        if (started)
+            events.Raise(new DefaultAudioDeviceChanged(args.Role.ToRole(), args.Id, AudioDeviceClass.Capture));
     }
 
     private void Watcher_Added(DeviceWatcher sender, DeviceInformation args)
     {
-        events.Raise(new AudioDeviceAdded(args.Id, new AudioDevice(args.Id, args.Name)));
+        if (sender == deviceWatcher)
+            events.Raise(new AudioDeviceAdded(args.Id, new AudioDevice(args.Id, args.Name)));
     }
 
     private void Watcher_Updated(DeviceWatcher sender, DeviceInformationUpdate args)
     {
+        if (sender != deviceWatcher)
+            return;
         string? fullName = null;
         bool? isEnabled = null;
 
@@ -102,11 +129,22 @@ public sealed class AudioDeviceWatcher : IDisposable
 
     private void Watcher_Removed(DeviceWatcher sender, DeviceInformationUpdate args)
     {
-        events.Raise(new AudioDeviceRemoved(args.Id));
+        if (sender == deviceWatcher)
+            events.Raise(new AudioDeviceRemoved(args.Id));
     }
 
     private void Watcher_EnumerationCompleted(DeviceWatcher sender, object args)
     {
-        enumerationCompletedSignal.Release();
+        if (sender == deviceWatcher)
+            enumerationCompleted?.TrySetResult();
+    }
+
+    private void Watcher_Stopped(DeviceWatcher sender, object args)
+    {
+        if (sender == deviceWatcher)
+        {
+            enumerationCompleted?.TrySetException(new AudioSwitcherException("Audio device enumeration stopped unexpectedly."));
+            Stop();
+        }
     }
 }

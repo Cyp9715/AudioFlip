@@ -21,7 +21,6 @@ public sealed record Command
     public string Name { get; init; } = string.Empty;
     public CommandType Action { get; init; }
     public AudioDeviceClass DeviceClass { get; init; }
-    public int HotkeyId => (int)$"{DeviceClass}:{Name}".GetDjb2HashCode();
     public Hotkey Hotkey { get; init; } = new();
     public string[] Devices { get; init; } = Array.Empty<string>();
 }

@@ -35,9 +35,16 @@ public sealed class AudioSwitcherToggler
             var device = availableDevices.FirstOrDefault(x => x.Id == deviceId);
             var deviceName = device?.Name ?? deviceId;
 
-            if (!audioManager.GetState(deviceId).HasFlag(AudioDeviceState.Active))
+            if (device == null)
             {
-                skipped.Add($"⚠️ Skipped '{deviceName}' because it is {audioManager.GetState(deviceId).ToString().ToLower()}.");
+                skipped.Add($"⚠️ Skipped '{deviceName}' because it is unavailable.");
+                continue;
+            }
+
+            var deviceState = audioManager.GetState(deviceId);
+            if (!deviceState.HasFlag(AudioDeviceState.Active))
+            {
+                skipped.Add($"⚠️ Skipped '{deviceName}' because it is {deviceState.ToString().ToLowerInvariant()}.");
                 continue;
             }
 
@@ -53,8 +60,11 @@ public sealed class AudioSwitcherToggler
                 continue;
             }
 
-            if (switchCommunicationDevice)
-                audioManager.SetDefaultDevice(deviceId, AudioDeviceRoleType.Communications);
+            if (switchCommunicationDevice && !audioManager.SetDefaultDevice(deviceId, AudioDeviceRoleType.Communications))
+            {
+                await notificationService.ShowNotificationAsync($"⚠️ {deviceName}: the default device changed, but the communication device could not be changed.");
+                return;
+            }
 
             if (deviceId != defaultAudioDevice || skipped.Count <= 0)
             {
@@ -75,7 +85,7 @@ public sealed class AudioSwitcherToggler
         {
             var device = devices[i];
             if (device == currentDeviceId)
-                return devices.TakeLast(devices.Length - i - 1).Concat(devices.Take(i));
+                return devices.Skip(i + 1).Concat(devices.Take(i + 1));
         }
 
         return devices;

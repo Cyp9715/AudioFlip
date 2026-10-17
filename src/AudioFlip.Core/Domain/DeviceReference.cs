@@ -8,10 +8,11 @@ public static class DeviceReference
 
     public static string Encode(string id, string name)
     {
-        var encodedName = Uri.EscapeDataString(name);
-        var idHash = id.GetDjb2HashCode();
-        return $"{Prefix}{encodedName}|{idHash}";
+        return EncodeName(name, id.GetDjb2HashCode());
     }
+
+    public static bool IsMatch(string reference, AudioDevice device, IReadOnlyCollection<AudioDevice> devices) =>
+        TryResolveId(reference, devices, out var id) && id == device.Id;
 
     public static bool IsMatch(string reference, AudioDevice device)
     {
@@ -43,29 +44,58 @@ public static class DeviceReference
         }
 
         var sameName = devices.Where(x => string.Equals(x.Name, name, StringComparison.Ordinal)).ToArray();
-        if (sameName.Length == 1)
-        {
-            deviceId = sameName[0].Id;
-            return true;
-        }
-
         var sameNameAndHash = sameName.Where(x => x.Id.GetDjb2HashCode() == idHash).ToArray();
-        if (sameNameAndHash.Length == 1)
+        if (idHash != 0 && sameNameAndHash.Length == 1)
         {
             deviceId = sameNameAndHash[0].Id;
             return true;
         }
 
         var sameHash = devices.Where(x => x.Id.GetDjb2HashCode() == idHash).ToArray();
-        if (sameHash.Length == 1)
+        if (idHash != 0 && sameHash.Length == 1)
         {
             deviceId = sameHash[0].Id;
+            return true;
+        }
+
+        // Windows updates can replace an endpoint ID. Only use its name when
+        // it identifies exactly one device, and prefer a surviving ID above.
+        if (sameName.Length == 1)
+        {
+            deviceId = sameName[0].Id;
             return true;
         }
 
         deviceId = string.Empty;
         return false;
     }
+
+    public static string[] UpdateSelection(
+        IEnumerable<string> references,
+        IReadOnlyCollection<AudioDevice> availableDevices,
+        IEnumerable<AudioDevice> selectedDevices)
+    {
+        var remaining = selectedDevices.DistinctBy(x => x.Id).ToDictionary(x => x.Id);
+        var result = new List<string>();
+        foreach (var reference in references)
+        {
+            if (!TryResolveId(reference, availableDevices, out var id))
+            {
+                // A disconnected or ambiguous endpoint must survive unrelated edits.
+                result.Add(reference);
+            }
+            else if (remaining.Remove(id, out var device))
+            {
+                result.Add(Encode(device.Id, device.Name));
+            }
+        }
+
+        result.AddRange(remaining.Values.Select(x => Encode(x.Id, x.Name)));
+        return result.Distinct().ToArray();
+    }
+
+    internal static string EncodeName(string name, uint idHash) =>
+        $"{Prefix}{Uri.EscapeDataString(name)}|{idHash}";
 
     private static bool TryDecode(string reference, out string name, out uint idHash)
     {

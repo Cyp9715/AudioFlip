@@ -26,7 +26,7 @@ public sealed class Shell32
         MF_REMOVE = 0x1000,
     }
 
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     public struct NOTIFYICONDATA
     {
         public int cbSize;
@@ -45,8 +45,10 @@ public sealed class Shell32
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)]
         public string szInfoTitle;
         public int dwInfoFlags;
+        public Guid guidItem;
+        public IntPtr hBalloonIcon;
     }
 
-    [DllImport("shell32.dll", SetLastError = true)]
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     public static extern bool Shell_NotifyIcon(uint dwMessage, in NOTIFYICONDATA pnid);
 }

@@ -2,20 +2,19 @@
 
 namespace AudioFlip;
 
-using System.Text.Json;
-
 public sealed class StateStorage : IStateStorage
 {
-    public AudioSwitcherState Load()
+    private readonly JsonFileStateStorage storage;
+
+    public StateStorage()
     {
-        var localSettings = Windows.Storage.ApplicationData.Current.LocalSettings;
-        var content = localSettings.Values["settings"]?.ToString();
-        return string.IsNullOrWhiteSpace(content) ? new() : (JsonSerializer.Deserialize<AudioSwitcherState>(content) ?? new());
+        var appData = Windows.Storage.ApplicationData.Current;
+        storage = new JsonFileStateStorage(
+            Path.Combine(appData.LocalFolder.Path, "settings.json"),
+            () => appData.LocalSettings.Values["settings"]?.ToString());
     }
 
-    public void Save(AudioSwitcherState state)
-    {
-        var localSettings = Windows.Storage.ApplicationData.Current.LocalSettings;
-        localSettings.Values["settings"] = JsonSerializer.Serialize(state);
-    }
+    public AudioSwitcherState Load() => storage.Load();
+
+    public void Save(AudioSwitcherState state) => storage.Save(state);
 }

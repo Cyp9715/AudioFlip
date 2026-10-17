@@ -10,7 +10,6 @@ using Windows.ApplicationModel;
 using Activation = Windows.ApplicationModel.Activation;
 using PInvoke;
 using Microsoft.UI.Xaml.Controls;
-using System.Reflection.Metadata.Ecma335;
 
 public sealed partial class App : Application, IApp
 {
@@ -72,7 +71,17 @@ public sealed partial class App : Application, IApp
             return;
         }
 
-        _window = new MainWindow();
+        try
+        {
+            _window = new MainWindow();
+            await _window.InitializeAsync();
+        }
+        catch (Exception e)
+        {
+            User32.MessageBox(IntPtr.Zero, e.Message, AudioSwitcherState.Title, User32.MessageBoxOptions.MB_ICONERROR);
+            Environment.Exit(1);
+            return;
+        }
 
         var background = AppInstance.GetActivatedEventArgs() is Activation.IStartupTaskActivatedEventArgs task
             && task?.TaskId == AudioSwitcher.StartupTaskId

@@ -18,9 +18,10 @@ public sealed class GroupNotificationService : INotificationService
         return Task.CompletedTask;
     }
 
-    public void Commit()
+    public Task CommitAsync()
     {
-        if (messages.Count > 0)
-            notificationService.ShowNotificationAsync(string.Join(Environment.NewLine, messages));
+        return messages.Count > 0
+            ? notificationService.ShowNotificationAsync(string.Join(Environment.NewLine, messages))
+            : Task.CompletedTask;
     }
 }
