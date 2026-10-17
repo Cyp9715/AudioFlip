@@ -1,81 +1,49 @@
 name: CI
 
-on: [push, pull_request]
+on: [push, pull_request, workflow_dispatch]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
-
-    runs-on: windows-2022
-
-    env:
-      PLATFORM: x64
-      CONFIGURATION: Release
-
+  test:
+    runs-on: windows-2025-vs2026
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
-          fetch-depth: '0'
- 
-      - name: Add msbuild to PATH
-        uses: microsoft/setup-msbuild@v1.0.2
-         
-      - uses: GuillaumeFalourd/setup-windows10-sdk-action@v1
+          dotnet-version: '10.0.x'
+      - name: Run regression tests
+        run: ./build.ps1 test
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
         with:
-          sdk-version: 18362
+          name: test-results
+          path: test/TestResults/*.trx
+          if-no-files-found: error
 
-      - name: Create Certificate
-        env:
-          CERTIFICATE: ${{ secrets.CERTIFICATE }}
-        run: ./build create-certificate
-        
-      - name: Generate version
-        uses: aarnott/nbgv@master
+  package:
+    needs: test
+    runs-on: windows-2025-vs2026
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [x64, arm64]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
-          setAllVars: true
-
-      - name: Write version
-        run: ./build set-package-version
-        
-      - name: Install Audio Devices
-        run: ./build install-audio-devices
-
-      - name: Restore
-        run: ./build restore
-
-      - name: Test
-        run: ./build test
-
-      - name: Build Package
-        run: ./build
-
-      - name: Upload installer
-        uses: actions/upload-artifact@v2
+          dotnet-version: '10.0.x'
+      - name: Build unsigned MSIX bundle
+        run: ./build.ps1 build -platform ${{ matrix.platform }}
+      - name: Upload package
+        uses: actions/upload-artifact@v7
         with:
-          name: AudioFlip ${{ env.NBGV_version }}
-          path: AppPackages/AudioFlip (Package)_${{ env.NBGV_SimpleVersion }}.0_Test/*.msixbundle
-
-      - name: Upload certificate
-        uses: actions/upload-artifact@v2
-        with:
-          name: Certificate
-          path: AppPackages/AudioFlip (Package)_${{ env.NBGV_SimpleVersion }}.0_Test/*.cer
-          
-      - name: Remove _Test folder
-        run: Remove-Item AppPackages/*_Test -Recurse
-
-      - name: Upload bundle for ms store
-        uses: actions/upload-artifact@v2
-        with:
-          name: Upload
-          path: AppPackages/*.msixupload
-
-      - name: Publish to Windows Store
-        uses: isaacrlevin/windows-store-action@1.0
-        if: startsWith(github.ref, 'refs/tags/v')
-        with:
-          tenant-id: ${{ secrets.AZURE_AD_TENANT_ID }}
-          client-id: ${{ secrets.AZURE_AD_APPLICATION_CLIENT_ID }}
-          client-secret: ${{ secrets.AZURE_AD_APPLICATION_SECRET }}
-          app-id: ${{ secrets.STORE_APP_ID }}
-          package-path: "AppPackages"
+          name: AudioFlip-${{ matrix.platform }}
+          path: AppPackages/**/*.msixbundle
+          if-no-files-found: error
